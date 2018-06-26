@@ -7,10 +7,10 @@ os.system("python setup.py build_ext -i")
 from graph_extraction import get_graph
 
 
-# General parameters
-p.define("local_feat_num", 3)
-p.define("global_feat_p_num", 5)
-p.define("global_feat_t_num", 4)
+# Graph structure
+p.define("nodes_nb", 64)
+p.define("feat_nb", 352)
+p.define("neigh_size", 0.1)
 
 # Data transformation
 p.define("to_remove", 0.)
