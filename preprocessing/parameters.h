@@ -2,22 +2,19 @@
 #define PARAMS_H
 
 
-#define GRIDSIZE 64
-#define GRIDSIZE_H GRIDSIZE/2
+// #define GRIDSIZE 64
+// #define GRIDSIZE_H GRIDSIZE/2
 
 
 struct Parameters
 {
-  // Local params
-  unsigned int local_feat_num;
-  unsigned int sal_pt_num;
-  unsigned int neigh_size;
-  // Global params
-  unsigned int global_feat_p_num;
-  unsigned int global_feat_t_num;
-  unsigned int triplet_num;
+  // Graph structure
+  unsigned int nodes_nb;
+  unsigned int feat_nb;
+  float neigh_size;
+  unsigned int neigh_nb;
+  // General
   unsigned int gridsize;
-  // Generic
   bool viz;
   bool debug;
   // PC tranformations
