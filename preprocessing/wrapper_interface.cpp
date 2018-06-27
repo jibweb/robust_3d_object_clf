@@ -1,4 +1,9 @@
+#include <random>
 #include <time.h>        /* clock_t, clock, CLOCKS_PER_SEC */
+#include <vector>
+
+#include <pcl/io/pcd_io.h>
+#include <pcl/visualization/pcl_visualizer.h>
 
 #include "augmentation_preprocessing.cpp"
 #include "graph_structure.cpp"
@@ -46,131 +51,94 @@ private:
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-int compute_graph_feats (std::string filename,
-    double** local_feats,
-    double* global_feats_p,
-    double* global_feats_t,
-    int* valid_sal_pt_num,
-    Parameters params) {
-  // pcl::ScopeTime total("Total time");
+int compute_graph_feats(std::string filename,
+                        double* node_feats,
+                        double* adj_mat,
+                        Parameters params){
+  ScopeTime total("Total time", params.debug);
 
   // Point cloud reading
   pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc(new pcl::PointCloud<pcl::PointXYZINormal>);
   {
-    // pcl::ScopeTime t("Point Cloud reading");
+    ScopeTime t("Point Cloud reading", params.debug);
     if (pcl::io::loadPCDFile<pcl::PointXYZINormal> (filename.c_str(), *pc) == -1) {
       PCL_ERROR("Couldn't read %s file \n", filename.c_str());
       return (-1);
     }
   }
 
+  // Data corruption (occlusion, noise, downsampling, ...)
   {
-    ScopeTime t("Downsampling", params.debug);
-    int pt_to_remove = params.to_remove*pc->points.size();
-    int pre_pc_size = pc->points.size();
-    for (uint i=0; i<pt_to_remove; i++) {
-      int idx = rand()%static_cast<int>(pc->points.size());
-      if (std::isnan(pc->points[idx].x))
-        i--;
-      else
-        pc->points[idx].x = pc->points[idx].y = pc->points[idx].z = std::numeric_limits<float>::quiet_NaN();
-    }
+    ScopeTime t("Data preprocessing/augmentation", params.debug);
 
-    std::vector<int> indices;
-    pc->is_dense = false;
-    pcl::removeNaNFromPointCloud(*pc, *pc, indices);
-    if (params.debug)
-        std::cout << "Downsampling: pts_to_remove " << pt_to_remove
-                  << " / Pct_to_remove " << params.to_remove
-                  << " / Pre pc size " << pre_pc_size
-                  << " / Post pc size " << pc->points.size() << std::endl;
+    Eigen::Vector4f centroid;
+    scale_points_unit_sphere (*pc, params.gridsize/2, centroid);
+    params.neigh_size = params.neigh_size * params.gridsize/2;
+    augment_data(pc, params);
   }
 
-  if (params.occl_pct != 0.){
-    ScopeTime t("Occluding", params.debug);
-    int pre_pc_size = pc->points.size();
-    pcl::search::KdTree<pcl::PointXYZINormal>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZINormal>);
-    tree->setInputCloud (pc);
 
-    int occl_neigh = params.occl_pct * pc->points.size();
-    int index = rand()%static_cast<int>(pc->points.size());
-
-    std::vector< int > k_indices(occl_neigh, 0);
-    std::vector< float > k_sqr_distances(occl_neigh, 0.);
-    tree->nearestKSearch(pc->points[index], occl_neigh, k_indices, k_sqr_distances);
-
-    for (uint i=0; i<k_indices.size(); i++) {
-      int idx = k_indices[i];
-      pc->points[idx].x = pc->points[idx].y = pc->points[idx].z = std::numeric_limits<float>::quiet_NaN();
-    }
-
-    std::vector<int> indices;
-    pc->is_dense = false;
-    pcl::removeNaNFromPointCloud(*pc, *pc, indices);
-    if (params.debug)
-        std::cout << "Occlusion: occl_neigh " << occl_neigh
-                  << " / Pre pc size " << pre_pc_size
-                  << " / Post pc size " << pc->points.size() << std::endl;
-  }
-
-  if (params.noise_std >= 0.000001) {
-    ScopeTime t("Noise", params.debug);
-
-    boost::mt19937 rng; rng.seed (static_cast<unsigned int> (time (0)));
-    pcl::PointXYZINormal minPt, maxPt;
-    pcl::getMinMax3D (*pc, minPt, maxPt);
-    float max_dist = pcl::euclideanDistance (minPt, maxPt);
-    double standard_deviation = params.noise_std * max_dist;
-    boost::normal_distribution<> nd (0, standard_deviation);
-    boost::variate_generator<boost::mt19937&, boost::normal_distribution<> > var_nor (rng, nd);
-
-    for (size_t point_i = 0; point_i < pc->points.size (); ++point_i)
-    {
-      pc->points[point_i].x = pc->points[point_i].x + static_cast<float> (var_nor ());
-      pc->points[point_i].y = pc->points[point_i].y + static_cast<float> (var_nor ());
-      pc->points[point_i].z = pc->points[point_i].z + static_cast<float> (var_nor ());
-    }
-    if (params.debug)
-      std::cout << "Noise std: " << standard_deviation << std::endl;
-  }
-
-  // Scale to unit sphere
-  Eigen::Vector4f xyz_centroid;
-  scale_points_unit_sphere (*pc, static_cast<float>(GRIDSIZE_H), xyz_centroid);
-
-
+  // Sample graph nodes
+  pcl::search::KdTree<pcl::PointXYZINormal>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZINormal>);
+  tree->setInputCloud (pc);
   std::vector<int> sampled_indices;
   {
-    ScopeTime t("Local features computation", params.debug);
-    // local_RFfeatures(pc, local_feats, sampled_indices, params);
+    ScopeTime t("Node sampling", params.debug);
+    srand (static_cast<unsigned int> (time (0)));
+    sample_local_points(pc, sampled_indices, *tree, params);
   }
 
 
-  srand (static_cast<unsigned int> (time (0)));
+  {
+    ScopeTime t("Local features computation", params.debug);
+    shot_features(pc, node_feats, sampled_indices, tree, params);
+  }
 
 
   std::vector<std::vector<std::vector<int> > > lut_;
   {
     ScopeTime t("Voxelization computation", params.debug);
-    lut_.resize (GRIDSIZE);
-    for (int i = 0; i < GRIDSIZE; ++i) {
-        lut_[i].resize (GRIDSIZE);
-        for (int j = 0; j < GRIDSIZE; ++j)
-          lut_[i][j].resize (GRIDSIZE);
+    lut_.resize (params.gridsize);
+    for (uint i = 0; i < params.gridsize; ++i) {
+        lut_[i].resize (params.gridsize);
+        for (uint j = 0; j < params.gridsize; ++j)
+          lut_[i][j].resize (params.gridsize);
     }
-    voxelize9 (*pc, lut_);
+    voxelize (*pc, lut_, params.gridsize);
   }
 
 
   {
-    ScopeTime t("Global feature computation", params.debug);
-    global_features(pc, global_feats_p, global_feats_t, lut_, params);
+    ScopeTime t("Graph structure computation", params.debug);
+    occupancy_graph_structure(pc, adj_mat, sampled_indices, lut_, params);
   }
 
   if (params.debug)
     std::cout << "Salient points sampled: " << sampled_indices.size() << std::endl;
 
-  *valid_sal_pt_num = sampled_indices.size();
+  if (params.viz) {
+
+    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
+    viewer->setBackgroundColor (0, 0, 0);
+
+    for (uint i=0; i<sampled_indices.size(); i++) {
+      int idx = sampled_indices[i];
+      viewer->addSphere<pcl::PointXYZINormal>(pc->points[idx], 0.1, 1., 0., 0., "line_" +std::to_string(idx));
+      for (uint i2=0; i2<params.nodes_nb; i2++) {
+        if (adj_mat[params.nodes_nb*i + i2] > 0.) {
+          int idx2 = sampled_indices[i2];
+          viewer->addLine<pcl::PointXYZINormal>(pc->points[idx], pc->points[idx2], 0., 0., 1., "line_" +std::to_string(idx)+std::to_string(idx2));
+        }
+      }
+    }
+
+    // params.to_remove = 0.9;
+    // augment_data(pc, params);
+    // viewer->addPointCloud<pcl::PointXYZINormal> (pc, "cloud");
+    while (!viewer->wasStopped()) {
+      viewer->spinOnce(100);
+    }
+  }
 
   return 0;
 }
