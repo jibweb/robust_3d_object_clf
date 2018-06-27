@@ -1,65 +1,82 @@
-#include <pcl/features/shot_lrf.h>
+// #include <pcl/features/shot_lrf.h>
+#include <pcl/features/shot.h>
 
 #include "parameters.h"
 
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void local_RFfeatures(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
-                    double** result,
-                    std::vector<int> & sampled_indices,
-                    Parameters & p) {
-  if (p.debug) {
-    if (p.sal_pt_num*2*p.neigh_size > pc->points.size()) {
-      std::cout << "Trying to sample too many points OR the neighborhood is too large. "
-                   "Reduce either of those !!!" << std::endl;
-    }
-  }
-
-  int index;
-  std::vector< int > k_indices(p.neigh_size, 0);
-  std::vector< float > k_sqr_distances(p.neigh_size, 0.);
-  pcl::PointCloud<pcl::PointXYZINormal>::Ptr viz_local_pc(new pcl::PointCloud<pcl::PointXYZINormal>);
-
-  pcl::search::KdTree<pcl::PointXYZINormal>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZINormal>);
-  tree->setInputCloud (pc);
-
-  sample_local_points(pc, sampled_indices, *tree, p);
-
-  pcl::PointCloud<pcl::ReferenceFrame> lrf_pc;
+void shot_features(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
+                   double* result,
+                   std::vector<int> & sampled_indices,
+                   pcl::search::KdTree<pcl::PointXYZINormal>::Ptr tree,
+                   Parameters & p) {
+  pcl::PointCloud<pcl::SHOT352> shot_pc;
   boost::shared_ptr<std::vector<int> > sampled_indices_ptr(new std::vector<int> (sampled_indices));
 
-  pcl::SHOTLocalReferenceFrameEstimation<pcl::PointXYZINormal, pcl::ReferenceFrame> lrf_estimator;
-  lrf_estimator.setRadiusSearch (8.);
-  lrf_estimator.setInputCloud (pc->makeShared ());
-  lrf_estimator.setSearchMethod (tree);
-  lrf_estimator.setIndices (sampled_indices_ptr);
-  lrf_estimator.compute (lrf_pc);
+  // Compute the SHOT descriptor
+  pcl::SHOTEstimation<pcl::PointXYZINormal, pcl::PointXYZINormal, pcl::SHOT352> shot_estimator;
+  shot_estimator.setRadiusSearch (p.neigh_size);
+  shot_estimator.setInputCloud (pc->makeShared ());
+  shot_estimator.setInputNormals (pc->makeShared ());
+  shot_estimator.setSearchMethod (tree);
+  shot_estimator.setIndices (sampled_indices_ptr);
+  shot_estimator.compute (shot_pc);
 
-  for (uint sal_pt_idx=0; sal_pt_idx < sampled_indices.size(); sal_pt_idx++) {
-    index = sampled_indices[sal_pt_idx];
-    tree->nearestKSearch(pc->points[index], p.neigh_size, k_indices, k_sqr_distances);
-
-    Eigen::Matrix3f local_rf = lrf_pc.points[sal_pt_idx].getMatrix3fMap();
-    Eigen::Vector3f v1 = pc->points[index].getVector3fMap();
-
-    if (std::isnan(local_rf(0)) ||
-        std::isnan(local_rf(1)) ||
-        std::isnan(local_rf(2))){
-      std::cout << "Garbage LRF: " << sal_pt_idx << std::endl;
-      continue;
-    }
-
-    for (uint nn_idx=0; nn_idx < k_indices.size(); nn_idx++) {
-      if (p.viz)
-        viz_local_pc->points.push_back(pc->points[k_indices[nn_idx]]);
-
-      Eigen::Vector3f v2 = pc->points[k_indices[nn_idx]].getVector3fMap();
-      Eigen::Vector3f new_coords = local_rf*(v2 - v1);
-      result[sal_pt_idx][p.local_feat_num*nn_idx + 0] = new_coords(0);
-      result[sal_pt_idx][p.local_feat_num*nn_idx + 1] = new_coords(1);
-      result[sal_pt_idx][p.local_feat_num*nn_idx + 2] = new_coords(2);
-    }
+  for (uint pt_idx=0; pt_idx<shot_pc.points.size(); pt_idx++) {
+    for (uint i=0; i<p.feat_nb; i++)
+      result[p.feat_nb*pt_idx + i] = shot_pc.points[pt_idx].descriptor[i];
   }
-
-  if (p.viz)
-    pcl::io::savePCDFile ("local_test.pcd", *viz_local_pc, true);
 }
+
+
+// //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// void local_RFfeatures(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
+//                     double** result,
+//                     std::vector<int> & sampled_indices,
+//                     pcl::search::KdTree<pcl::PointXYZINormal>::Ptr tree,
+//                     Parameters & p) {
+//   int index;
+//   std::vector< int > k_indices;
+//   std::vector< float > k_sqr_distances;
+//   pcl::PointCloud<pcl::PointXYZINormal>::Ptr viz_local_pc(new pcl::PointCloud<pcl::PointXYZINormal>);
+
+//   pcl::PointCloud<pcl::ReferenceFrame> lrf_pc;
+//   boost::shared_ptr<std::vector<int> > sampled_indices_ptr(new std::vector<int> (sampled_indices));
+
+//   // Compute the SHOT LRF
+//   pcl::SHOTLocalReferenceFrameEstimation<pcl::PointXYZINormal, pcl::ReferenceFrame> lrf_estimator;
+//   lrf_estimator.setRadiusSearch (8.);
+//   lrf_estimator.setInputCloud (pc->makeShared ());
+//   lrf_estimator.setSearchMethod (tree);
+//   lrf_estimator.setIndices (sampled_indices_ptr);
+//   lrf_estimator.compute (lrf_pc);
+
+//   for (uint pt_idx=0; pt_idx < sampled_indices.size(); pt_idx++) {
+//     index = sampled_indices[pt_idx];
+//     tree->nearestKSearch(pc->points[index], p.neigh_size, k_indices, k_sqr_distances);
+
+//     Eigen::Matrix3f local_rf = lrf_pc.points[pt_idx].getMatrix3fMap();
+//     Eigen::Vector3f v1 = pc->points[index].getVector3fMap();
+
+//     if (std::isnan(local_rf(0)) ||
+//         std::isnan(local_rf(1)) ||
+//         std::isnan(local_rf(2))){
+//       std::cout << "Garbage LRF: " << pt_idx << std::endl;
+//       continue;
+//     }
+
+//     for (uint nn_idx=0; nn_idx < k_indices.size(); nn_idx++) {
+//       if (p.viz)
+//         viz_local_pc->points.push_back(pc->points[k_indices[nn_idx]]);
+
+//       Eigen::Vector3f v2 = pc->points[k_indices[nn_idx]].getVector3fMap();
+//       Eigen::Vector3f new_coords = local_rf*(v2 - v1);
+//       result[pt_idx][p.feat_nb*nn_idx + 0] = new_coords(0);
+//       result[pt_idx][p.feat_nb*nn_idx + 1] = new_coords(1);
+//       result[pt_idx][p.feat_nb*nn_idx + 2] = new_coords(2);
+//     }
+//   }
+
+//   if (p.viz)
+//     pcl::io::savePCDFile ("local_test.pcd", *viz_local_pc, true);
+// }
