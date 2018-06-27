@@ -75,7 +75,7 @@ for k, v in ext_args.iteritems():
 print "\n\n"
 
 setup(
-    name='SF Estimation',
+    name='Graph Structure Estimation',
     ext_modules=cythonize(Extension(
         "graph_extraction",
         ["preprocessing/graph_extraction.pyx"],
