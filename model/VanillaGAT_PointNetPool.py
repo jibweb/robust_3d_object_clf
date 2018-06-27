@@ -6,7 +6,7 @@ from utils.params import params as p
 
 from layers import attn_head, g_k
 
-MODEL_NAME = "VanillaGAT-PointNetPool"
+MODEL_NAME = "VanillaGAT_PointNetPool"
 
 # Dropout prob params
 p.define("attn_drop_prob", 0.0)

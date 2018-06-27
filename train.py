@@ -4,8 +4,8 @@ import tensorflow as tf
 from tensorflow.contrib.metrics import streaming_mean
 
 from dataset import get_dataset, DATASETS
-from feature_preprocessing import get_graph_preprocessing
-from model.RelationalPointNet import Model, MODEL_NAME
+from preprocessing import get_graph_preprocessing
+from model.VanillaGAT_PointNetPool import Model, MODEL_NAME
 from utils.params import params as p
 
 
@@ -13,19 +13,19 @@ DATASET = DATASETS.ModelNet10
 Dataset, CLASS_DICT = get_dataset(DATASET)
 
 # === PARAMETERS ==============================================================
-# Model parameters
-p.define("sal_pt_num", 50)
-p.define("neigh_size", 64)
-p.define("triplet_num", 1500)
-
 # Training parameters
+p.define("max_epochs", 500)
+p.define("batch_size", 32)
+p.define("learning_rate", 0.001)
+p.define("reg_constant", 0.01)
+p.define("decay_steps", 10000)
+p.define("decay_rate", 0.96)
+
 p.learning_rate = 0.001
 p.reg_constant = 0.01
 p.decay_steps = 150000
 p.decay_rate = 0.7
-p.define("dropout_prob", 0.5)
-p.define("max_steps", 500001)
-p.define("batch_size", 32)
+
 p.define("val_set_pct", 0.05)
 
 # Generic
@@ -37,20 +37,6 @@ p.to_remove = 0.
 p.occl_pct = 0.
 p.noise_std = 0.
 
-
-# # Training parameters
-# p.learning_rate = 0.001
-# p.reg_constant = 0.01
-# p.decay_steps = 150000
-# p.decay_rate = 0.7
-# p.define("dropout_prob", 0.5)
-p.define("max_epochs", 500)
-# p.define("batch_size", 32)
-# p.define("val_set_pct", 0.05)
-
-# # Generic
-# set_log_level("INFO")
-# p.define("num_classes", len(CLASS_DICT))
 
 p.load("params/{}_{}.yaml".format(DATASET.name, MODEL_NAME))
 EXPERIMENT_VERSION = p.get_hash()
