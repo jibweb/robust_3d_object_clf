@@ -200,7 +200,7 @@ void sample_local_points(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
     }
 
     if (rdn_weight >= 0.) {
-      std::cout << "Couldn't sample " << p.nodes_nb - pt_idx << " salient points" << std::endl;
+      // std::cout << "Couldn't sample " << p.nodes_nb - pt_idx << " salient points" << std::endl;
       break;
     }
 
@@ -257,6 +257,7 @@ void occupancy_graph_structure(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
     // mean_dist /= p.neigh_nb;
 
     Eigen::Vector4f v1 = local_cloud->points[pt_idx].getVector4fMap ();
+    adj_mat[p.nodes_nb*pt_idx + pt_idx] = 1.;
     for (uint i=0; i<p.neigh_nb; i++) {
       if (k_sqr_distances[i] == 0.)
         continue;
