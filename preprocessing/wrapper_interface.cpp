@@ -127,21 +127,24 @@ int compute_graph_feats(std::string filename,
 
     for (uint i=0; i<sampled_indices.size(); i++) {
       int idx = sampled_indices[i];
+
       if (params.viz_small_spheres)
-        viewer->addSphere<pcl::PointXYZINormal>(pc->points[idx], 0.05, 1., 0., 0., "line_" +std::to_string(idx));
+        viewer->addSphere<pcl::PointXYZINormal>(pc->points[idx], 0.05, 1., 0., 0., "sphere_" +std::to_string(idx));
       else
-        viewer->addSphere<pcl::PointXYZINormal>(pc->points[idx], params.neigh_size, 1., 0., 0., "line_" +std::to_string(idx));
+        viewer->addSphere<pcl::PointXYZINormal>(pc->points[idx], params.neigh_size, 1., 0., 0., "sphere_" +std::to_string(idx));
+
       for (uint i2=0; i2<params.nodes_nb; i2++) {
         if (adj_mat[params.nodes_nb*i + i2] > 0.) {
           int idx2 = sampled_indices[i2];
-          viewer->addLine<pcl::PointXYZINormal>(pc->points[idx], pc->points[idx2], 0., 0., 1., "line_" +std::to_string(idx)+std::to_string(idx2));
+          if (idx != idx2)
+            viewer->addLine<pcl::PointXYZINormal>(pc->points[idx], pc->points[idx2], 0., 0., 1., "line_" +std::to_string(idx)+std::to_string(idx2));
         }
       }
     }
 
     // params.to_remove = 0.9;
     // augment_data(pc, params);
-    // viewer->addPointCloud<pcl::PointXYZINormal> (pc, "cloud");
+    viewer->addPointCloud<pcl::PointXYZINormal> (pc, "cloud");
     while (!viewer->wasStopped()) {
       viewer->spinOnce(100);
     }
