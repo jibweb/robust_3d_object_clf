@@ -178,25 +178,30 @@ void sample_local_points(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
   std::vector< float > k_sqr_distances;
 
   int total_weight = pc->points.size();
-  std::vector<int> probs(pc->points.size(), 1);
+  std::vector<bool> probs(pc->points.size(), true);
 
   for (uint pt_idx=0; pt_idx < p.nodes_nb; pt_idx++) {
     // Sample a new point
-    if (total_weight > 0)
+    if (total_weight > 0) {
       rdn_weight = rand() % total_weight;
-    else {
-
+      index = -1;
+    } else {
+      break;
     }
 
     for (uint i=0; i<pc->points.size(); i++){
-      rdn_weight -= probs[i];
-      if (rdn_weight <= 0) {
+      if (!probs[i])
+        continue;
+
+      if (rdn_weight == 0) {
         index = i;
         break;
       }
+
+      rdn_weight -= 1;
     }
 
-    if (rdn_weight > 0) {
+    if (index == -1) {
       // There is no point left to sample !
       // std::cout << "Couldn't sample " << p.nodes_nb - pt_idx << " salient points" << std::endl;
       break;
@@ -204,7 +209,7 @@ void sample_local_points(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
 
     // Check if the sampled point is usable
     if (std::isnan(pc->points[index].normal_x)) {
-      probs[index] = 0;
+      probs[index] = false;
       total_weight -= 1;
       pt_idx--;
       continue;
@@ -215,8 +220,10 @@ void sample_local_points(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
 
     // Update the sampling probability
     for (uint i=0; i < k_indices.size(); i++) {
-      total_weight -= 1;
-      probs[k_indices[i]] = 0;
+      if (probs[k_indices[i]])
+        total_weight -= 1;
+
+      probs[k_indices[i]] = false;
     }
 
     sampled_indices.push_back(index);
