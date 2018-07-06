@@ -1,6 +1,6 @@
-from logger import TimeScope
 import numpy as np
 import tensorflow as tf
+from utils.logger import TimeScope
 from utils.tf import fc, fc_bn, define_scope
 from utils.params import params as p
 
@@ -72,65 +72,90 @@ class Model(object):
     def inference(self):
         """ This is the forward calculation from x to y """
         # --- Features dim reduction ------------------------------------------
-        if p.red_hid_units:
+        feat_red_out = self.node_feats
+        if p.red_hid_units != []:
             with tf.variable_scope('feat_dim_red'):
                 feat_red = tf.layers.conv1d(self.node_feats,
-                                            p.red_hid_units[0], 1)
-                feat_red = tf.layers.conv1d(feat_red, p.red_hid_units[1], 1)
+                                            p.red_hid_units[0], 1,
+                                            use_bias=False)
+                if len(p.red_hid_units) > 1:
+                    for i in range(1, len(p.red_hid_units)):
+                        feat_red = tf.layers.conv1d(feat_red,
+                                                    p.red_hid_units[i], 1,
+                                                    use_bias=False)
+                feat_red_out = feat_red
         # --- Graph attention layers ------------------------------------------
-        attns = []
-        for _ in range(p.p.n_heads[0]):
-            attns.append(attn_head(feat_red,
-                                   bias_mat=self.bias_mat,
-                                   out_sz=p.attn_hid_units[0],
-                                   activation=tf.nn.elu,
-                                   in_drop=self.feat_drop,
-                                   coef_drop=self.attn_drop,
-                                   residual=False))
-        h_1 = tf.concat(attns, axis=-1)
-        for i in range(1, len(p.attn_hid_units)):
-            attns = []
-            for _ in range(p.n_heads[i]):
-                attns.append(attn_head(h_1,
-                                       bias_mat=self.bias_mat,
-                                       out_sz=p.attn_hid_units[i],
-                                       activation=tf.nn.elu,
-                                       in_drop=self.feat_drop,
-                                       coef_drop=self.attn_drop,
-                                       residual=p.residual))
-            h_1 = tf.concat(attns, axis=-1)
-        # out = []
-        # for i in range(p.n_heads[-1]):
-        #     out.append(attn_head(h_1,
-        #                          bias_mat=self.bias_mat,
-        #                          out_sz=p.num_classes,
-        #                          activation=lambda x: x,
-        #                          in_drop=self.feat_drop,
-        #                          coef_drop=self.attn_drop,
-        #                          residual=False))
-        # logits = tf.add_n(out) / p.n_heads[-1]
-        attn_out = h_1
+        with tf.variable_scope('graph_attn'):
+            # attns = []
+            # for _ in range(p.n_heads[0]):
+            #     attns.append(attn_head(feat_red_out,
+            #                            bias_mat=self.bias_mat,
+            #                            out_sz=p.attn_hid_units[0],
+            #                            activation=tf.nn.elu,
+            #                            in_drop=self.feat_drop,
+            #                            coef_drop=self.attn_drop,
+            #                            residual=False))
+            # h_1 = tf.concat(attns, axis=-1)
+            h_1 = feat_red_out
+            # for i in range(1, len(p.attn_hid_units)):
+            for i in range(len(p.attn_hid_units)):
+                attns = []
+                for _ in range(p.n_heads[i]):
+                    attns.append(attn_head(h_1,
+                                           bias_mat=self.bias_mat,
+                                           out_sz=p.attn_hid_units[i],
+                                           activation=tf.nn.elu,
+                                           in_drop=self.feat_drop,
+                                           coef_drop=self.attn_drop,
+                                           residual=p.residual))
+                h_1 = tf.concat(attns, axis=-1)
+            # out = []
+            # for i in range(p.n_heads[-1]):
+            #     out.append(attn_head(h_1,
+            #                          bias_mat=self.bias_mat,
+            #                          out_sz=p.num_classes,
+            #                          activation=lambda x: x,
+            #                          in_drop=self.feat_drop,
+            #                          coef_drop=self.attn_drop,
+            #                          residual=False))
+            # logits = tf.add_n(out) / p.n_heads[-1]
+            attn_out = h_1
 
         # --- Set Pooling -----------------------------------------------------
         with tf.variable_scope('graph_pool'):
-            g_pool = g_k(attn_out, 'g_' + str(0),
-                         filter_num=p.pool_hid_units[0],
-                         is_training=self.is_training,
-                         bn_decay=self.bn_decay)
-            for i in range(1, len(p.pool_hid_units)):
+            # g_pool = g_k(attn_out, 'g_' + str(0),
+            #              filter_num=p.pool_hid_units[0],
+            #              is_training=self.is_training,
+            #              bn_decay=self.bn_decay,
+            #              reg_constant=p.reg_constant)
+            g_pool = attn_out
+            for i in range(len(p.pool_hid_units)):
                 g_pool = g_k(g_pool, 'g_' + str(i),
                              filter_num=p.pool_hid_units[i],
                              is_training=self.is_training,
-                             bn_decay=self.bn_decay)
+                             bn_decay=self.bn_decay,
+                             reg_constant=p.reg_constant)
 
             # Pooling of the pairs
             max_gg = tf.reduce_max(g_pool, axis=1, name='max_g')
             fcg = fc_bn(max_gg, 256,
                         scope='fcg',
                         is_training=self.is_training,
-                        bn_decay=self.bn_decay)
+                        bn_decay=self.bn_decay,
+                        reg_constant=p.reg_constant)
 
-        return fc(fcg, p.num_classes,
+        # --- Classification --------------------------------------------------
+        # fc_1 = fc_bn(fcg, 256, scope='fc_1',
+        #              is_training=self.is_training,
+        #              bn_decay=self.bn_decay)
+        # fc_1d = tf.nn.dropout(fc_1, 1.0 - self.pool_drop)
+        fc_2 = fc_bn(fcg, 128, scope='fc_2',
+                     is_training=self.is_training,
+                     bn_decay=self.bn_decay,
+                     reg_constant=p.reg_constant)
+        fc_2 = tf.nn.dropout(fc_2, 1.0 - self.pool_drop)
+
+        return fc(fc_2, p.num_classes,
                   activation_fn=None, scope='logits')
 
     @define_scope
