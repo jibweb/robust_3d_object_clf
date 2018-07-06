@@ -173,39 +173,39 @@ void sample_local_points(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
                          pcl::search::KdTree<pcl::PointXYZINormal> & tree,
                          Parameters & p) {
   // Prepare the values for the sampling procedure
-  double total_weight = 10000.;
-  // for (uint i=0; i < pc->points.size(); i++)
-  //   total_weight += pc->points[i].intensity;
-
-  double uniform_prob = total_weight / static_cast<float>(pc->points.size());
-  for (uint i=0; i < pc->points.size(); i++)
-    pc->points[i].intensity += uniform_prob;
-
-  // total_weight *= 2;
-  double rdn_weight;
-  int index;
+  int rdn_weight, index;
   std::vector< int > k_indices;
   std::vector< float > k_sqr_distances;
 
+  int total_weight = pc->points.size();
+  std::vector<int> probs(pc->points.size(), 1);
+
   for (uint pt_idx=0; pt_idx < p.nodes_nb; pt_idx++) {
     // Sample a new point
-    rdn_weight = rand()%static_cast<int>(floor(std::max(total_weight, 1.)));
+    if (total_weight > 0)
+      rdn_weight = rand() % total_weight;
+    else {
+
+    }
 
     for (uint i=0; i<pc->points.size(); i++){
-      rdn_weight -= pc->points[i].intensity;
-      if (rdn_weight < 0.) {
+      rdn_weight -= probs[i];
+      if (rdn_weight <= 0) {
         index = i;
         break;
       }
     }
 
-    if (rdn_weight >= 0.) {
+    if (rdn_weight > 0) {
+      // There is no point left to sample !
       // std::cout << "Couldn't sample " << p.nodes_nb - pt_idx << " salient points" << std::endl;
       break;
     }
 
     // Check if the sampled point is usable
     if (std::isnan(pc->points[index].normal_x)) {
+      probs[index] = 0;
+      total_weight -= 1;
       pt_idx--;
       continue;
     }
@@ -213,10 +213,10 @@ void sample_local_points(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
     // Extract the sampled point neighborhood
     tree.radiusSearch(pc->points[index], p.neigh_size, k_indices, k_sqr_distances);
 
-    // Update the attention values
+    // Update the sampling probability
     for (uint i=0; i < k_indices.size(); i++) {
-      total_weight -= pc->points[k_indices[i]].intensity;
-      pc->points[k_indices[i]].intensity = 0.;
+      total_weight -= 1;
+      probs[k_indices[i]] = 0;
     }
 
     sampled_indices.push_back(index);
@@ -264,7 +264,7 @@ void occupancy_graph_structure(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
 
       Eigen::Vector4f v2 = pc->points[k_indices[i]].getVector4fMap ();
       occ_ratio = occupancy_ratio(v1, v2, lut_, p.gridsize/2);
-      if (occ_ratio > 0.1) { //} && k_sqr_distances[i] < 1.1*mean_dist) {
+      if (occ_ratio > 0.0) { //} && k_sqr_distances[i] < 1.1*mean_dist) {
         adj_mat[p.nodes_nb*pt_idx + k_indices[i]] = 1.;
         adj_mat[p.nodes_nb*k_indices[i] + pt_idx] = 1.;
       }
