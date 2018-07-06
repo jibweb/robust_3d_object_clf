@@ -91,7 +91,11 @@ int compute_graph_feats(std::string filename,
 
   {
     ScopeTime t("Local features computation", params.debug);
-    shot_features(pc, node_feats, sampled_indices, tree, params);
+    if (params.feat_nb == 352)
+      shot_features(pc, node_feats, sampled_indices, tree, params);
+    else if (params.feat_nb == 33)
+      fpfh_features(pc, node_feats, sampled_indices, tree, params);
+
   }
 
 
@@ -123,7 +127,10 @@ int compute_graph_feats(std::string filename,
 
     for (uint i=0; i<sampled_indices.size(); i++) {
       int idx = sampled_indices[i];
-      viewer->addSphere<pcl::PointXYZINormal>(pc->points[idx], 0.1, 1., 0., 0., "line_" +std::to_string(idx));
+      if (params.viz_small_spheres)
+        viewer->addSphere<pcl::PointXYZINormal>(pc->points[idx], 0.05, 1., 0., 0., "line_" +std::to_string(idx));
+      else
+        viewer->addSphere<pcl::PointXYZINormal>(pc->points[idx], params.neigh_size, 1., 0., 0., "line_" +std::to_string(idx));
       for (uint i2=0; i2<params.nodes_nb; i2++) {
         if (adj_mat[params.nodes_nb*i + i2] > 0.) {
           int idx2 = sampled_indices[i2];

@@ -17,6 +17,7 @@ cdef extern from "wrapper_interface.cpp":
         # General
         unsigned int gridsize
         bint viz
+        bint viz_small_spheres
         bint debug
         # PC transformations
         float to_remove
@@ -33,18 +34,19 @@ cdef extern from "wrapper_interface.cpp":
 @cython.wraparound(False)
 def get_graph(filename, **kwargs):  # p):
     cdef Parameters params
-    params.nodes_nb = kwargs.get("nodes_nb", 50)
-    params.feat_nb = kwargs.get("feat_nb", 352)
-    params.neigh_size = kwargs.get("neigh_size", 0.1)
-    params.neigh_nb = kwargs.get("neigh_nb", 8)
+    params.nodes_nb = kwargs.get("nodes_nb")
+    params.feat_nb = kwargs.get("feat_nb")
+    params.neigh_size = kwargs.get("neigh_size")
+    params.neigh_nb = kwargs.get("neigh_nb")
 
-    params.gridsize = kwargs.get("gridsize", 64)
-    params.viz = kwargs.get("viz", False)
-    params.debug = kwargs.get("debug", False)
+    params.gridsize = kwargs.get("gridsize")
+    params.viz = kwargs.get("viz")
+    params.viz_small_spheres = kwargs.get("viz_small_spheres")
+    params.debug = kwargs.get("debug")
 
-    params.to_remove = kwargs.get("to_remove", 0.)
-    params.occl_pct = kwargs.get("occl_pct", 0.)
-    params.noise_std = kwargs.get("noise_std", 0.)
+    params.to_remove = kwargs.get("to_remove")
+    params.occl_pct = kwargs.get("occl_pct")
+    params.noise_std = kwargs.get("noise_std")
 
     if params.debug:
         print params

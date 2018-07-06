@@ -16,6 +16,7 @@ struct Parameters
   // General
   unsigned int gridsize;
   bool viz;
+  bool viz_small_spheres;
   bool debug;
   // PC tranformations
   float to_remove;
