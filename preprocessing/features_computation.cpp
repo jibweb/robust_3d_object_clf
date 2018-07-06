@@ -1,5 +1,6 @@
 // #include <pcl/features/shot_lrf.h>
 #include <pcl/features/shot.h>
+#include <pcl/features/fpfh.h>
 
 #include "parameters.h"
 
@@ -24,10 +25,35 @@ void shot_features(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
 
   for (uint pt_idx=0; pt_idx<shot_pc.points.size(); pt_idx++) {
     for (uint i=0; i<p.feat_nb; i++)
-      result[p.feat_nb*pt_idx + i] = shot_pc.points[pt_idx].descriptor[i];
+      if (!std::isnan(shot_pc.points[pt_idx].descriptor[i]))
+        result[p.feat_nb*pt_idx + i] = shot_pc.points[pt_idx].descriptor[i];
   }
 }
 
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void fpfh_features(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
+                   double* result,
+                   std::vector<int> & sampled_indices,
+                   pcl::search::KdTree<pcl::PointXYZINormal>::Ptr tree,
+                   Parameters & p) {
+  pcl::PointCloud<pcl::FPFHSignature33>::Ptr fpfhs (new pcl::PointCloud<pcl::FPFHSignature33> ());
+  boost::shared_ptr<std::vector<int> > sampled_indices_ptr(new std::vector<int> (sampled_indices));
+
+  pcl::FPFHEstimation<pcl::PointXYZINormal, pcl::PointXYZINormal, pcl::FPFHSignature33> fpfh;
+  fpfh.setInputCloud (pc);
+  fpfh.setInputNormals (pc);
+  fpfh.setSearchMethod (tree);
+  fpfh.setIndices (sampled_indices_ptr);
+  fpfh.setRadiusSearch (p.neigh_size / 2.); // IMPORTANT: the radius used here has to be larger than the radius used to estimate the surface normals!!!
+  fpfh.compute (*fpfhs);
+
+  for (uint pt_idx=0; pt_idx<fpfhs->points.size(); pt_idx++) {
+    for (uint i=0; i<p.feat_nb; i++)
+      if (!std::isnan(fpfhs->points[pt_idx].histogram[i]))
+        result[p.feat_nb*pt_idx + i] = fpfhs->points[pt_idx].histogram[i];
+  }
+}
 
 // //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // void local_RFfeatures(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
