@@ -4,7 +4,7 @@ from utils.logger import TimeScope
 from utils.tf import fc, fc_bn, define_scope
 from utils.params import params as p
 
-from layers import graph_conv, g_k
+from layers import graph_conv, g_k, conv1d_bn
 
 MODEL_NAME = "VanillaGCN_PointNetPool"
 
@@ -69,36 +69,35 @@ class Model(object):
         """ This is the forward calculation from x to y """
         # --- Features dim reduction ------------------------------------------
         feat_red_out = self.node_feats
-        if p.red_hid_units != []:
-            with tf.variable_scope('feat_dim_red'):
-                feat_red = tf.layers.conv1d(self.node_feats,
-                                            p.red_hid_units[0], 1,
-                                            use_bias=False)
-                if len(p.red_hid_units) > 1:
-                    for i in range(1, len(p.red_hid_units)):
-                        feat_red = tf.layers.conv1d(feat_red,
-                                                    p.red_hid_units[i], 1,
-                                                    use_bias=False)
-                feat_red_out = feat_red
+        with tf.variable_scope('feat_dim_red'):
+            for i in range(len(p.red_hid_units)):
+                feat_red_out = conv1d_bn(feat_red_out,
+                                         out_sz=p.red_hid_units[i],
+                                         reg_constant=p.reg_constant,
+                                         is_training=self.is_training)
 
         # --- Graph attention layers ------------------------------------------
         with tf.variable_scope('graph_layers'):
-            h_1 = feat_red_out
+            feat_gcn = feat_red_out
             for i in range(len(p.graph_hid_units)):
-                h_1 = graph_conv(h_1,
-                                 bias_mat=self.bias_mat,
-                                 out_sz=p.graph_hid_units[i],
-                                 activation=tf.nn.elu,
-                                 in_drop=self.feat_drop,
-                                 residual=p.residual)
-            gcn_out = h_1
+                feat_gcn = graph_conv(feat_gcn,
+                                      out_sz=p.graph_hid_units[i],
+                                      bias_mat=self.bias_mat,
+                                      activation=tf.nn.elu,
+                                      reg_constant=p.reg_constant,
+                                      is_training=self.is_training,
+                                      scope='gcn_' + str(i),
+                                      bn_decay=self.bn_decay,
+                                      in_drop=self.feat_drop,
+                                      residual=p.residual)
+            gcn_out = feat_gcn
 
         # --- Set Pooling -----------------------------------------------------
         with tf.variable_scope('graph_pool'):
             g_pool = gcn_out
             for i in range(len(p.pool_hid_units)):
                 g_pool = g_k(g_pool, 'g_' + str(i),
-                             filter_num=p.pool_hid_units[i],
+                             out_sz=p.pool_hid_units[i],
                              is_training=self.is_training,
                              bn_decay=self.bn_decay,
                              reg_constant=p.reg_constant)
@@ -112,18 +111,19 @@ class Model(object):
                         reg_constant=p.reg_constant)
 
         # --- Classification --------------------------------------------------
-        # fc_1 = fc_bn(fcg, 256, scope='fc_1',
-        #              is_training=self.is_training,
-        #              bn_decay=self.bn_decay)
-        # fc_1d = tf.nn.dropout(fc_1, 1.0 - self.pool_drop)
-        fc_2 = fc_bn(fcg, 128, scope='fc_2',
-                     is_training=self.is_training,
-                     bn_decay=self.bn_decay,
-                     reg_constant=p.reg_constant)
-        fc_2 = tf.nn.dropout(fc_2, 1.0 - self.pool_drop)
+        with tf.variable_scope('classification'):
+            # fc_1 = fc_bn(fcg, 256, scope='fc_1',
+            #              is_training=self.is_training,
+            #              bn_decay=self.bn_decay)
+            # fc_1d = tf.nn.dropout(fc_1, 1.0 - self.pool_drop)
+            fc_2 = fc_bn(fcg, 128, scope='fc_2',
+                         is_training=self.is_training,
+                         bn_decay=self.bn_decay,
+                         reg_constant=p.reg_constant)
+            fc_2 = tf.nn.dropout(fc_2, 1.0 - self.pool_drop)
 
-        return fc(fc_2, p.num_classes,
-                  activation_fn=None, scope='logits')
+            return fc(fc_2, p.num_classes,
+                      activation_fn=None, scope='logits')
 
     @define_scope
     def loss(self):
