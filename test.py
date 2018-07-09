@@ -1,4 +1,3 @@
-from functools import partial
 import itertools
 from utils.logger import log, set_log_level, TimeScope
 import matplotlib.pyplot as plt
@@ -7,11 +6,11 @@ import os
 import tensorflow as tf
 
 from dataset import get_dataset
-from train import estimate_sf, DATASET_NAME, SAVE_DIR
-from params import params as p
-from model.RelationalPointNet import Model
+from preprocessing import get_graph_preprocessing_fn
+from train import Model, MODEL_NAME, DATASET, SAVE_DIR
+from utils.params import params as p
 
-Dataset, CLASS_DICT = get_dataset(DATASET_NAME)
+Dataset, CLASS_DICT = get_dataset(DATASET)
 # ---- Parameters ----
 
 # Model parameters
@@ -21,20 +20,8 @@ Dataset, CLASS_DICT = get_dataset(DATASET_NAME)
 # Generic
 # p.batch_size = 20
 set_log_level("INFO")
-p.define("test_repeat", 10)
-p.define("model_ckpt", "model_500000/model.ckpt")
-
-p.to_remove = 0.
-p.neigh_size = int((1 - p.to_remove)*64)
-p.occl_pct = 0.
-p.noise_std = 0.0
-feat_compute = partial(estimate_sf,
-                       sal_pt_num=p.sal_pt_num,
-                       neigh_size=p.neigh_size,
-                       to_remove=p.to_remove,
-                       occl_pct=p.occl_pct,
-                       noise_std=p.noise_std,
-                       triplet_num=p.triplet_num)
+p.define("test_repeat", 5)
+p.define("model_ckpt", "model_2990/model.ckpt")
 
 
 # --------------------
@@ -73,13 +60,14 @@ def plot_confusion_matrix(cm, classes,
 if __name__ == "__main__":
     # Clean previous experiments logs
     os.system("rm -rf {}test_tb/*".format(SAVE_DIR))
+    p.load("params/{}_{}.yaml".format(DATASET.name, MODEL_NAME))
 
     # === SETUP ===============================================================
+    # --- Pre processing function setup -----------------------------------
+    feat_compute = get_graph_preprocessing_fn(p)
     # --- Dataset setup -------------------------------------------------------
-    test_dataset = Dataset(is_training=False,
-                           feat_compute=feat_compute,
-                           batch_size=p.batch_size,
-                           val_set_pct=0.)
+    dataset = Dataset(batch_size=p.batch_size,
+                      val_set_pct=p.val_set_pct)
 
     # --- Model Setup ---------------------------------------------------------
     model = Model()
@@ -118,9 +106,7 @@ if __name__ == "__main__":
         total_cm = np.zeros((p.num_classes, p.num_classes), dtype=np.int32)
 
         for repeat in range(p.test_repeat):
-            test_batch = test_dataset.batch()
-
-            for xs, ys in test_batch:
+            for xs, ys in dataset.test_batch(process_fn=feat_compute):
                 with TimeScope("accuracy", debug_only=True):
                     summary, acc, loss, cm = sess.run(
                         [merged,
@@ -142,4 +128,4 @@ if __name__ == "__main__":
                 test_iter += 1
 
         plot_confusion_matrix(total_cm, sorted(CLASS_DICT.keys()))
-        #plt.show()
+        plt.show()

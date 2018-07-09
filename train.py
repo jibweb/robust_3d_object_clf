@@ -1,11 +1,12 @@
-from utils.logger import log, logd, set_log_level, TimeScope
 import os
 import tensorflow as tf
 from tensorflow.contrib.metrics import streaming_mean
 
 from dataset import get_dataset, DATASETS
-from preprocessing import get_graph_preprocessing
-from model.VanillaGAT_PointNetPool import Model, MODEL_NAME
+from preprocessing import get_graph_preprocessing_fn
+from model.VanillaGCN_PointNetPool import Model, MODEL_NAME
+from progress.bar import Bar
+from utils.logger import log, logd, set_log_level, TimeScope
 from utils.params import params as p
 
 
@@ -20,22 +21,11 @@ p.define("learning_rate", 0.001)
 p.define("reg_constant", 0.01)
 p.define("decay_steps", 10000)
 p.define("decay_rate", 0.96)
-
-p.learning_rate = 0.001
-p.reg_constant = 0.01
-p.decay_steps = 150000
-p.decay_rate = 0.7
-
 p.define("val_set_pct", 0.05)
 
 # Generic
 set_log_level("INFO")
 p.define("num_classes", len(CLASS_DICT))
-
-# Train/Test time
-p.to_remove = 0.
-p.occl_pct = 0.
-p.noise_std = 0.
 
 
 p.load("params/{}_{}.yaml".format(DATASET.name, MODEL_NAME))
@@ -49,13 +39,20 @@ os.system("mkdir -p " + SAVE_DIR)
 
 if __name__ == "__main__":
     # Clean previous experiments logs
-    os.system("rm -rf {}/*".format(SAVE_DIR))
+    if len(os.listdir(SAVE_DIR)) != 0:
+        if raw_input("A similar experiment was already saved."
+                     " Would you like to delete it ?") is 'y':
+            log("Experiment deleted !\n")
+            os.system("rm -rf {}/*".format(SAVE_DIR))
+        else:
+            log("Keeping the records, tensorboard might be screwed up\n")
+
     p.save(SAVE_DIR + "params.yaml")
 
     # === SETUP ===============================================================
     with TimeScope("setup", debug_only=True):
         # --- Pre processing function setup -----------------------------------
-        feat_compute = get_graph_preprocessing(p)
+        feat_compute = get_graph_preprocessing_fn(p)
         # --- Dataset setup ---------------------------------------------------
         dataset = Dataset(batch_size=p.batch_size,
                           val_set_pct=p.val_set_pct)
@@ -115,8 +112,10 @@ if __name__ == "__main__":
 
         for epoch in range(p.max_epochs):
             # --- Training step -----------------------------------------------
-            for idx, (xs, ys) in \
-             enumerate(dataset.train_batch(process_fn=feat_compute)):
+            train_iterator = dataset.train_batch(process_fn=feat_compute)
+            bar_name = "Epoch {}/{}".format(epoch, p.max_epochs)
+            bar = Bar(bar_name, max=dataset.train_batch_no)
+            for idx, (xs, ys) in enumerate(train_iterator):
                 with TimeScope("optimize", debug_only=True):
                     summary, loss, _ = sess.run(
                         [merged,
@@ -126,11 +125,14 @@ if __name__ == "__main__":
                                                       is_training=True))
                 train_iter = idx + epoch*dataset.train_batch_no
                 train_writer.add_summary(summary, train_iter)
-                epoch_perc = 100. * idx / dataset.train_batch_no
-                log("Epoch {}/{} | {:.2f}%",
-                    epoch,
-                    p.max_epochs,
-                    epoch_perc)
+                bar.next()
+                # epoch_perc = 100. * idx / dataset.train_batch_no
+                # log("Epoch {}/{} | {:.2f}%  loss: {}",
+                #     epoch,
+                #     p.max_epochs,
+                #     epoch_perc,
+                #     loss)
+            bar.finish()
 
             # --- Validation accuracy -----------------------------------------
             # Re initialize the streaming means
