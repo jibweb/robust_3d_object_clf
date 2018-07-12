@@ -278,3 +278,33 @@ void occupancy_graph_structure(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
     }
   }
 }
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void compute_graph(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
+                   pcl::search::KdTree<pcl::PointXYZINormal>::Ptr tree,
+                   std::vector<int> & sampled_indices,
+                   double* adj_mat,
+                   Parameters params) {
+  // Sample graph nodes
+  srand (static_cast<unsigned int> (time (0)));
+  sample_local_points(pc, sampled_indices, *tree, params);
+
+  if (params.debug)
+    std::cout << "Salient points sampled: " << sampled_indices.size() << std::endl;
+
+
+  // Voxelization
+  std::vector<std::vector<std::vector<int> > > lut_;
+  lut_.resize (params.gridsize);
+  for (uint i = 0; i < params.gridsize; ++i) {
+      lut_[i].resize (params.gridsize);
+      for (uint j = 0; j < params.gridsize; ++j)
+        lut_[i][j].resize (params.gridsize);
+  }
+  voxelize (*pc, lut_, params.gridsize);
+
+
+  // Graph structure
+  occupancy_graph_structure(pc, adj_mat, sampled_indices, lut_, params);
+}

@@ -1,4 +1,5 @@
 // #include <pcl/features/shot_lrf.h>
+#include <math.h>
 #include <pcl/features/shot.h>
 #include <pcl/features/fpfh.h>
 
@@ -53,6 +54,84 @@ void fpfh_features(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
       if (!std::isnan(fpfhs->points[pt_idx].histogram[i]))
         result[p.feat_nb*pt_idx + i] = fpfhs->points[pt_idx].histogram[i];
   }
+}
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void esf3d_features(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
+                    double** result,
+                    std::vector<int> & sampled_indices,
+                    pcl::search::KdTree<pcl::PointXYZINormal>::Ptr tree,
+                    Parameters & p) {
+  uint p1_idx, p2_idx, rdn_weight;
+  float pair_nb=0.;
+  uint max_pair_nb;
+
+  std::vector< int > k_indices;
+  std::vector< float > k_sqr_distances;
+
+  Eigen::Vector4f v1, v2, n1, n2, v12;
+  uint d_idx, na_idx, va_idx;
+  float max_dist = 2*p.neigh_size;
+
+  for (uint pt_idx=0; pt_idx<sampled_indices.size(); pt_idx++) {
+    // std::cout << "Point " << pt_idx << " / index: " << sampled_indices[pt_idx] <<std::endl;
+    tree->radiusSearch(pc->points[sampled_indices[pt_idx]], p.neigh_size, k_indices, k_sqr_distances);
+
+    // std::cout << "neighborhood: " << k_indices.size() << std::endl;
+    pair_nb = 0.;
+    max_pair_nb = k_indices.size() * (k_indices.size() - 1) / 2;
+
+    for (uint index1=0; index1<k_indices.size(); index1++) {
+      for (uint index2=index1+1; index2<k_indices.size(); index2++) {
+        rdn_weight = rand() % max_pair_nb;
+        if (rdn_weight > 500)
+          continue;
+
+        // std::cout << index1 << " " << index2;
+        p1_idx = k_indices[index1];
+        p2_idx = k_indices[index2];
+
+        if (std::isnan(pc->points[p1_idx].normal_x) || std::isnan(pc->points[p2_idx].normal_x))
+          continue;
+
+        // Get the vectors
+        v1 = pc->points[p1_idx].getVector4fMap ();
+        v2 = pc->points[p2_idx].getVector4fMap ();
+        n1 = pc->points[p1_idx].getNormalVector4fMap ();
+        n2 = pc->points[p2_idx].getNormalVector4fMap ();
+
+        v12 = v1 - v2;
+
+        // Get the indices
+        d_idx = static_cast<uint>(std::min(std::max(ceil(4*(v12.norm() / max_dist)) - 1, 0.), 3.));
+        na_idx = static_cast<uint>(std::min(std::max(ceil(2*(n1.dot(n2) + 1)) - 1, 0.), 3.));
+        v12.normalize();
+        va_idx = static_cast<uint>(std::min(std::max(ceil(4*std::max(fabs(v12.dot(n1)), fabs(v12.dot(n2)))) - 1, 0.), 3.));
+
+
+
+        if (na_idx > 3 || d_idx > 3 || va_idx > 3) {
+          std::cout << d_idx << " " << na_idx << " " << va_idx << std::endl;
+          std::cout << " " << n1 <<  " --- " << n2 << std::endl;
+          std::cout << "._._._." << v12 << "._._._." << std::endl;
+          std::cout << 4*4*d_idx + 4*na_idx + va_idx << std::endl;
+        }
+
+        result[pt_idx][4*4*d_idx + 4*na_idx + va_idx] += 1.;
+        pair_nb += 1;
+      }
+    }
+
+    // std::cout << "pair: " << pair_nb << " / " << max_pair_nb << std::endl;
+
+    // Normalize
+    for (uint i=0; i<64; i++)
+      result[pt_idx][i] /= pair_nb + 1e-6;
+
+    // std::cout << "Normalized happily" << std::endl;
+  }
+
 }
 
 // //////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -16,11 +16,18 @@ if __name__ == "__main__":
     p.nodes_nb = 128
     p.neigh_size = 0.15
     p.neigh_nb = 5
+    p.feats_3d = True
+    if p.feats_3d:
+        p.feat_nb = 4
+    else:
+        p.feat_nb = 33
+
     p.debug = True
     p.viz = True
     p.viz_small_spheres = True
-    p.feat_nb = 33
-    p.to_remove = 0.5
+
+    p.to_remove = 0.
+    p.to_keep = 5000
 
     feat_compute = get_graph_preprocessing_fn(p)
 

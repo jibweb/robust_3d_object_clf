@@ -51,6 +51,38 @@ private:
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void graph_viz(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
+                   std::vector<int> & sampled_indices,
+                   double* adj_mat,
+                   Parameters params) {
+  boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
+  viewer->setBackgroundColor (0, 0, 0);
+
+  for (uint i=0; i<sampled_indices.size(); i++) {
+    int idx = sampled_indices[i];
+
+    if (params.viz_small_spheres)
+      viewer->addSphere<pcl::PointXYZINormal>(pc->points[idx], 0.05, 1., 0., 0., "sphere_" +std::to_string(idx));
+    else
+      viewer->addSphere<pcl::PointXYZINormal>(pc->points[idx], params.neigh_size, 1., 0., 0., "sphere_" +std::to_string(idx));
+
+    for (uint i2=0; i2<params.nodes_nb; i2++) {
+      if (adj_mat[params.nodes_nb*i + i2] > 0.) {
+        int idx2 = sampled_indices[i2];
+        if (idx != idx2)
+          viewer->addLine<pcl::PointXYZINormal>(pc->points[idx], pc->points[idx2], 0., 0., 1., "line_" +std::to_string(idx)+std::to_string(idx2));
+      }
+    }
+  }
+
+  viewer->addPointCloud<pcl::PointXYZINormal> (pc, "cloud");
+  while (!viewer->wasStopped()) {
+    viewer->spinOnce(100);
+  }
+}
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 int compute_graph_feats(std::string filename,
                         double* node_feats,
                         double* adj_mat,
@@ -78,14 +110,13 @@ int compute_graph_feats(std::string filename,
   }
 
 
-  // Sample graph nodes
+  // Construct the graph
   pcl::search::KdTree<pcl::PointXYZINormal>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZINormal>);
   tree->setInputCloud (pc);
   std::vector<int> sampled_indices;
   {
-    ScopeTime t("Node sampling", params.debug);
-    srand (static_cast<unsigned int> (time (0)));
-    sample_local_points(pc, sampled_indices, *tree, params);
+    ScopeTime t("Graph construction", params.debug);
+    compute_graph(pc, tree, sampled_indices, adj_mat, params);
   }
 
 
@@ -98,57 +129,58 @@ int compute_graph_feats(std::string filename,
 
   }
 
+  if (params.viz)
+    graph_viz(pc, sampled_indices, adj_mat, params);
 
-  std::vector<std::vector<std::vector<int> > > lut_;
+  return 0;
+}
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+int compute_graph_feats3d(std::string filename,
+                          double** node_feats,
+                          double* adj_mat,
+                          Parameters params){
+  ScopeTime total("Total time", params.debug);
+
+  // Point cloud reading
+  pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc(new pcl::PointCloud<pcl::PointXYZINormal>);
   {
-    ScopeTime t("Voxelization computation", params.debug);
-    lut_.resize (params.gridsize);
-    for (uint i = 0; i < params.gridsize; ++i) {
-        lut_[i].resize (params.gridsize);
-        for (uint j = 0; j < params.gridsize; ++j)
-          lut_[i][j].resize (params.gridsize);
+    ScopeTime t("Point Cloud reading", params.debug);
+    if (pcl::io::loadPCDFile<pcl::PointXYZINormal> (filename.c_str(), *pc) == -1) {
+      PCL_ERROR("Couldn't read %s file \n", filename.c_str());
+      return (-1);
     }
-    voxelize (*pc, lut_, params.gridsize);
+  }
+
+  // Data corruption (occlusion, noise, downsampling, ...)
+  {
+    ScopeTime t("Data preprocessing/augmentation", params.debug);
+
+    Eigen::Vector4f centroid;
+    scale_points_unit_sphere (*pc, params.gridsize/2, centroid);
+    params.neigh_size = params.neigh_size * params.gridsize/2;
+    augment_data(pc, params);
+  }
+
+
+  // Construct the graph
+  pcl::search::KdTree<pcl::PointXYZINormal>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZINormal>);
+  tree->setInputCloud (pc);
+  std::vector<int> sampled_indices;
+  {
+    ScopeTime t("Graph construction", params.debug);
+    compute_graph(pc, tree, sampled_indices, adj_mat, params);
   }
 
 
   {
-    ScopeTime t("Graph structure computation", params.debug);
-    occupancy_graph_structure(pc, adj_mat, sampled_indices, lut_, params);
+    ScopeTime t("Local features computation", params.debug);
+    esf3d_features(pc, node_feats, sampled_indices, tree, params);
   }
 
-  if (params.debug)
-    std::cout << "Salient points sampled: " << sampled_indices.size() << std::endl;
-
-  if (params.viz) {
-
-    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
-    viewer->setBackgroundColor (0, 0, 0);
-
-    for (uint i=0; i<sampled_indices.size(); i++) {
-      int idx = sampled_indices[i];
-
-      if (params.viz_small_spheres)
-        viewer->addSphere<pcl::PointXYZINormal>(pc->points[idx], 0.05, 1., 0., 0., "sphere_" +std::to_string(idx));
-      else
-        viewer->addSphere<pcl::PointXYZINormal>(pc->points[idx], params.neigh_size, 1., 0., 0., "sphere_" +std::to_string(idx));
-
-      for (uint i2=0; i2<params.nodes_nb; i2++) {
-        if (adj_mat[params.nodes_nb*i + i2] > 0.) {
-          int idx2 = sampled_indices[i2];
-          if (idx != idx2)
-            viewer->addLine<pcl::PointXYZINormal>(pc->points[idx], pc->points[idx2], 0., 0., 1., "line_" +std::to_string(idx)+std::to_string(idx2));
-        }
-      }
-    }
-
-    // params.to_remove = 0.9;
-    // augment_data(pc, params);
-    viewer->addPointCloud<pcl::PointXYZINormal> (pc, "cloud");
-    while (!viewer->wasStopped()) {
-      viewer->spinOnce(100);
-    }
-  }
+  if (params.viz)
+    graph_viz(pc, sampled_indices, adj_mat, params);
 
   return 0;
 }

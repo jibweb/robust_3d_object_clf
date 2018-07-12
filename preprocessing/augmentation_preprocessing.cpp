@@ -40,6 +40,27 @@ void scale_points_unit_sphere (pcl::PointCloud<pcl::PointXYZINormal> &pc,
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void augment_data(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
                   Parameters & params) {
+
+  if (pc->points.size() > params.to_keep){
+    uint pt_to_remove = pc->points.size() - params.to_keep;
+    for (uint i=0; i<pt_to_remove; i++) {
+      int idx = rand()%static_cast<int>(pc->points.size());
+      if (std::isnan(pc->points[idx].x))
+        i--;
+      else
+        pc->points[idx].x = pc->points[idx].y = pc->points[idx].z = std::numeric_limits<float>::quiet_NaN();
+    }
+
+    std::vector<int> indices;
+    pc->is_dense = false;
+    pcl::removeNaNFromPointCloud(*pc, *pc, indices);
+    if (params.debug)
+        std::cout << "Downsampling (#): pts_to_remove " << pt_to_remove
+                  << " / Nb_to_keep " << params.to_keep
+                  << " / Post pc size " << pc->points.size() << std::endl;
+  }
+
+
   if (params.to_remove > 0.00000001) {
     // ScopeTime t("Downsampling", params.debug);
     uint pt_to_remove = params.to_remove*pc->points.size();
@@ -56,7 +77,7 @@ void augment_data(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
     pc->is_dense = false;
     pcl::removeNaNFromPointCloud(*pc, *pc, indices);
     if (params.debug)
-        std::cout << "Downsampling: pts_to_remove " << pt_to_remove
+        std::cout << "Downsampling (%): pts_to_remove " << pt_to_remove
                   << " / Pct_to_remove " << params.to_remove
                   << " / Pre pc size " << pre_pc_size
                   << " / Post pc size " << pc->points.size() << std::endl;

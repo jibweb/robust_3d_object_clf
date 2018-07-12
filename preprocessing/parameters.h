@@ -20,6 +20,7 @@ struct Parameters
   bool debug;
   // PC tranformations
   float to_remove;
+  unsigned int to_keep;
   float occl_pct;
   float noise_std;
 };
