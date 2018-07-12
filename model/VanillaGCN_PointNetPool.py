@@ -4,7 +4,7 @@ from utils.logger import TimeScope
 from utils.tf import fc, fc_bn, define_scope
 from utils.params import params as p
 
-from layers import graph_conv, g_k, conv1d_bn
+from layers import graph_conv, g_k, conv1d_bn, conv3d
 
 MODEL_NAME = "VanillaGCN_PointNetPool"
 
@@ -28,11 +28,20 @@ class Model(object):
                                             p.nodes_nb,
                                             p.nodes_nb),
                                            name="bias_mat")
-            self.node_feats = tf.placeholder(tf.float32,
-                                             (None,
-                                              p.nodes_nb,
-                                              p.feat_nb),
-                                             name="node_feats")
+            if p.feats_3d:
+                self.node_feats = tf.placeholder(tf.float32,
+                                                 (None,
+                                                  p.nodes_nb,
+                                                  p.feat_nb,
+                                                  p.feat_nb,
+                                                  p.feat_nb, 1),
+                                                 name="node_feats")
+            else:
+                self.node_feats = tf.placeholder(tf.float32,
+                                                 (None,
+                                                  p.nodes_nb,
+                                                  p.feat_nb),
+                                                 name="node_feats")
             self.y = tf.placeholder(tf.float32,
                                     [None, p.num_classes],
                                     name="y")
@@ -70,11 +79,38 @@ class Model(object):
         # --- Features dim reduction ------------------------------------------
         feat_red_out = self.node_feats
         with tf.variable_scope('feat_dim_red'):
-            for i in range(len(p.red_hid_units)):
+            if p.feats_3d:
+                feat_red_out = tf.reshape(feat_red_out, [-1, 4, 4, 4, 1])
+                feat_red_out = conv3d(feat_red_out,
+                                      scope="dimred_3d_1",
+                                      out_sz=2,
+                                      filter_sz=2,
+                                      reg_constant=p.reg_constant)
+                feat_red_out = conv3d(feat_red_out,
+                                      scope="dimred_3d_2",
+                                      out_sz=4,
+                                      filter_sz=2,
+                                      reg_constant=p.reg_constant)
+                feat_red_out = tf.reshape(feat_red_out, [-1, p.nodes_nb,
+                                                         2**3 * 4])
                 feat_red_out = conv1d_bn(feat_red_out,
-                                         out_sz=p.red_hid_units[i],
+                                         scope="dimred_flat_1",
+                                         out_sz=32,
                                          reg_constant=p.reg_constant,
                                          is_training=self.is_training)
+                feat_red_out = conv1d_bn(feat_red_out,
+                                         scope="dimred_flat_2",
+                                         out_sz=32,
+                                         reg_constant=p.reg_constant,
+                                         is_training=self.is_training)
+
+            else:
+                for i in range(len(p.red_hid_units)):
+                    feat_red_out = conv1d_bn(feat_red_out,
+                                             scope="dimred_" + str(i),
+                                             out_sz=p.red_hid_units[i],
+                                             reg_constant=p.reg_constant,
+                                             is_training=self.is_training)
 
         # --- Graph attention layers ------------------------------------------
         with tf.variable_scope('graph_layers'):

@@ -1,5 +1,5 @@
 import tensorflow as tf
-from utils.tf import conv1d, conv1d_bn,\
+from utils.tf import conv1d, conv1d_bn, conv3d,\
                      weight_variable, bias_variable, batch_norm_for_conv1d
 
 
@@ -54,7 +54,7 @@ def graph_conv(seq, out_sz, bias_mat, activation,
             seq = tf.nn.dropout(seq, 1.0 - in_drop)
 
         # seq_fts = tf.layers.conv1d(seq, out_sz, 1, use_bias=False)
-        seq_fts = conv1d(seq, out_sz, reg_constant,
+        seq_fts = conv1d(seq, out_sz, reg_constant, "conv",
                          activation=None, use_bias=False)
         coefs = tf.nn.softmax(bias_mat)
 
@@ -67,10 +67,10 @@ def graph_conv(seq, out_sz, bias_mat, activation,
         biases = bias_variable([out_sz], reg_constant)
         ret = vals + biases
 
-        ret_norm = batch_norm_for_conv1d(ret,
-                                         is_training=is_training,
-                                         bn_decay=bn_decay,
-                                         scope='bn')
+        ret_bn = batch_norm_for_conv1d(ret,
+                                       is_training=is_training,
+                                       bn_decay=bn_decay,
+                                       scope='bn')
 
         # residual connection
         if residual:
@@ -79,17 +79,13 @@ def graph_conv(seq, out_sz, bias_mat, activation,
             else:
                 seq_fts = ret + seq
 
-        return activation(ret_norm)  # activation
+        return activation(ret_bn)  # activation
 
 
 def g_k(tens_in, scope, out_sz, is_training, bn_decay, reg_constant):
-    feat_num = tens_in.get_shape()[-1].value
-    filter_shape = [1, feat_num, out_sz]
     with tf.variable_scope(scope):
-        kernel = weight_variable(filter_shape, reg_constant)
-        biases = bias_variable([out_sz], reg_constant)
-        g_k = tf.nn.conv1d(tens_in, kernel, stride=1,
-                           padding='SAME') + biases
+        g_k = conv1d(tens_in, out_sz, reg_constant, "conv",
+                     activation=None)
         with tf.variable_scope("max_var"):
             max_var = weight_variable([out_sz], reg_constant)
         g_k = g_k - tf.expand_dims(max_var*tf.reduce_max(g_k, axis=1,
