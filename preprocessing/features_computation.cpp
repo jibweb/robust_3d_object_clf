@@ -58,6 +58,22 @@ void fpfh_features(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void points_coords_features(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
+                   double* result,
+                   std::vector<int> & sampled_indices,
+                   pcl::search::KdTree<pcl::PointXYZINormal>::Ptr tree,
+                   Parameters & p) {
+  for (uint pt_idx=0; pt_idx<sampled_indices.size(); pt_idx++) {
+    result[p.feat_nb*pt_idx + 0] = pc->points[sampled_indices[pt_idx]].x *2/p.gridsize;
+    result[p.feat_nb*pt_idx + 1] = pc->points[sampled_indices[pt_idx]].y *2/p.gridsize;
+    result[p.feat_nb*pt_idx + 2] = pc->points[sampled_indices[pt_idx]].z *2/p.gridsize;
+  }
+}
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void esf3d_features(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
                     double** result,
                     std::vector<int> & sampled_indices,
@@ -66,6 +82,7 @@ void esf3d_features(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
   uint p1_idx, p2_idx, rdn_weight;
   float pair_nb=0.;
   uint max_pair_nb;
+  const int sample_pair_nb = 500;
 
   std::vector< int > k_indices;
   std::vector< float > k_sqr_distances;
@@ -82,10 +99,13 @@ void esf3d_features(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
     pair_nb = 0.;
     max_pair_nb = k_indices.size() * (k_indices.size() - 1) / 2;
 
+    if (p.debug && max_pair_nb < sample_pair_nb)
+      std::cout << "Max pair nb: " << max_pair_nb << std::endl;
+
     for (uint index1=0; index1<k_indices.size(); index1++) {
       for (uint index2=index1+1; index2<k_indices.size(); index2++) {
         rdn_weight = rand() % max_pair_nb;
-        if (rdn_weight > 500)
+        if (rdn_weight > sample_pair_nb)
           continue;
 
         // std::cout << index1 << " " << index2;
@@ -113,21 +133,27 @@ void esf3d_features(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
 
         if (na_idx > 3 || d_idx > 3 || va_idx > 3) {
           std::cout << d_idx << " " << na_idx << " " << va_idx << std::endl;
-          std::cout << " " << n1 <<  " --- " << n2 << std::endl;
-          std::cout << "._._._." << v12 << "._._._." << std::endl;
+          std::cout << " " << n1 <<  "\n --- \n " << n2 << std::endl;
+          std::cout << "._._._.\n" << v12 << "\n._._._." << std::endl;
           std::cout << 4*4*d_idx + 4*na_idx + va_idx << std::endl;
         }
 
         result[pt_idx][4*4*d_idx + 4*na_idx + va_idx] += 1.;
         pair_nb += 1;
+
+        if (pair_nb == sample_pair_nb)
+          goto norm_hist;
       }
     }
 
+    norm_hist:
     // std::cout << "pair: " << pair_nb << " / " << max_pair_nb << std::endl;
 
     // Normalize
-    for (uint i=0; i<64; i++)
+    for (uint i=0; i<64; i++) {
       result[pt_idx][i] /= pair_nb + 1e-6;
+      // result[pt_idx][i] -= 0.5;
+    }
 
     // std::cout << "Normalized happily" << std::endl;
   }
