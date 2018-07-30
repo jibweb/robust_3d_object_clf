@@ -215,15 +215,20 @@ void sample_local_points(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
       continue;
     }
 
-    // Extract the sampled point neighborhood
-    tree.radiusSearch(pc->points[index], p.neigh_size, k_indices, k_sqr_distances);
+    if (p.neigh_size > 0.) {
+      // Extract the sampled point neighborhood
+      tree.radiusSearch(pc->points[index], p.neigh_size, k_indices, k_sqr_distances);
 
-    // Update the sampling probability
-    for (uint i=0; i < k_indices.size(); i++) {
-      if (probs[k_indices[i]])
-        total_weight -= 1;
+      // Update the sampling probability
+      for (uint i=0; i < k_indices.size(); i++) {
+        if (probs[k_indices[i]])
+          total_weight -= 1;
 
-      probs[k_indices[i]] = false;
+        probs[k_indices[i]] = false;
+      }
+    } else {
+      probs[index] = false;
+      total_weight -= 1;
     }
 
     sampled_indices.push_back(index);
@@ -344,6 +349,65 @@ void edge_feats_adjacency(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
       edge_feats_mat[5*(p.nodes_nb*pt2 + pt1) + 3] = a12n1;
       edge_feats_mat[5*(p.nodes_nb*pt1 + pt2) + 4] = a12n2;
       edge_feats_mat[5*(p.nodes_nb*pt2 + pt1) + 4] = a12n2;
+    }
+  }
+}
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void coords_feats_adjacency(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
+                            double* adj_mat,
+                            double* edge_feats_mat,
+                            pcl::search::KdTree<pcl::PointXYZINormal>::Ptr tree,
+                            std::vector<int> & sampled_indices,
+                            std::vector<std::vector<std::vector<int> > > &lut_,
+                            Parameters & p) {
+
+  int index1, index2;
+  float d, a12, occ_r;
+  pcl::PointCloud<pcl::ReferenceFrame> lrf_pc;
+  boost::shared_ptr<std::vector<int> > sampled_indices_ptr(new std::vector<int> (sampled_indices));
+
+  pcl::SHOTLocalReferenceFrameEstimation<pcl::PointXYZINormal, pcl::ReferenceFrame> lrf_estimator;
+  lrf_estimator.setRadiusSearch (p.neigh_size);
+  lrf_estimator.setInputCloud (pc);
+  lrf_estimator.setSearchMethod (tree);
+  lrf_estimator.setIndices (sampled_indices_ptr);
+  lrf_estimator.compute (lrf_pc);
+
+  for (uint pt1_idx=0; pt1_idx < sampled_indices.size(); pt1_idx++) {
+    index1 = sampled_indices[pt1_idx];
+    Eigen::Matrix3f local_rf = lrf_pc.points[pt1_idx].getMatrix3fMap();
+    local_rf.normalize();
+    Eigen::Vector3f v1 = pc->points[index1].getVector3fMap();
+    Eigen::Vector4f n1 = pc->points[index1].getNormalVector4fMap ();
+
+    if (std::isnan(local_rf(0)) ||
+        std::isnan(local_rf(1)) ||
+        std::isnan(local_rf(2))){
+      std::cout << "Garbage LRF: " << pt1_idx << std::endl;
+      for (uint i=0; i<p.nodes_nb; i++)
+        adj_mat[p.nodes_nb*pt1_idx + i] = 0;
+      continue;
+    }
+
+    for (uint pt2_idx=0; pt2_idx < sampled_indices.size(); pt2_idx++) {
+      index2 = sampled_indices[pt2_idx];
+      Eigen::Vector3f v2 = pc->points[index2].getVector3fMap();
+      Eigen::Vector4f n2 = pc->points[index2].getNormalVector4fMap ();
+      Eigen::Vector4f v12 = v2 - v1;
+      Eigen::Vector3f new_coords = local_rf * v21;
+      d = v12.norm() / (p.gridsize);
+      v12.normalize();
+      occ_r = occupancy_ratio(v1, v2, lut_, p.gridsize/2);
+      a12 = n1.dot(n2)/2;
+
+      edge_feats_mat[6*(p.nodes_nb*pt1_idx + pt2_idx) + 0] = d;
+      edge_feats_mat[6*(p.nodes_nb*pt1_idx + pt2_idx) + 1] = new_coords(0);
+      edge_feats_mat[6*(p.nodes_nb*pt1_idx + pt2_idx) + 2] = new_coords(1);
+      edge_feats_mat[6*(p.nodes_nb*pt1_idx + pt2_idx) + 3] = new_coords(2);
+      edge_feats_mat[6*(p.nodes_nb*pt1_idx + pt2_idx) + 4] = a12;
+      edge_feats_mat[6*(p.nodes_nb*pt1_idx + pt2_idx) + 5] = occ_r;
     }
   }
 }
