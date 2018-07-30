@@ -1,18 +1,82 @@
 import tensorflow as tf
-from utils.tf import conv1d, conv1d_bn, conv3d,\
+from utils.tf import conv1d, conv2d, conv1d_bn, conv3d,\
                      weight_variable, bias_variable, batch_norm_for_conv1d
 
 
+def edge_attn(seq, out_sz, bias_mat, edge_feats, activation,
+              reg_constant, is_training, bn_decay, scope,
+              in_drop=0.0, coef_drop=0.0, residual=False, use_bias_mat=True):
+    with tf.variable_scope(scope):
+        # if in_drop != 0.0:
+        #     seq = tf.nn.dropout(seq, 1.0 - in_drop)
+
+        # seq_fts = tf.layers.conv1d(seq, out_sz, 1, use_bias=False)
+        # seq_fts = conv1d(seq, out_sz, reg_constant, "feat_conv",
+        #                  activation=None, use_bias=False)
+        seq_fts = conv1d_bn(seq, out_sz, reg_constant, is_training,
+                            "feat_conv", activation=None, use_bias=False)
+
+        # edge feature attention
+        logits = conv2d(edge_feats, 1, 1, reg_constant, "edge_feats_attn")
+        # Reshaped to be the same size as bias_mat
+        # The last dimension is 1, the nb of filters
+        nodes_nb = bias_mat.get_shape()[-1].value
+        logits = tf.reshape(logits, [-1, nodes_nb, nodes_nb])
+
+        # bias_mat to reintroduce graph structure
+        pre_coefs = tf.nn.leaky_relu(logits)
+        if use_bias_mat:
+            pre_coefs += bias_mat
+        coefs = tf.nn.softmax(pre_coefs)
+
+        vals = tf.matmul(coefs, seq_fts)
+        biases = bias_variable([out_sz], reg_constant)
+        ret = vals + biases
+
+        # ret_bn = batch_norm_for_conv1d(ret,
+        #                                is_training=is_training,
+        #                                bn_decay=bn_decay,
+        #                                scope='bn')
+
+        return activation(ret)  # activation
+
+
+def neighboring_edge_attn(seq, out_sz, dist_thresh, edge_feats, activation,
+                          reg_constant, is_training, bn_decay, scope,
+                          in_drop=0.0, coef_drop=0.0, residual=False,
+                          use_bias_mat=True):
+    with tf.variable_scope(scope):
+        neigh_adj = tf.cast(edge_feats[:, :, :, 0] < dist_thresh, tf.float32)
+        neigh_bias = -1e9 * (1.0 - neigh_adj)
+        return edge_attn(seq, out_sz, neigh_bias, edge_feats, activation,
+                         reg_constant, is_training, bn_decay, "edge_attn",
+                         in_drop=in_drop, coef_drop=coef_drop,
+                         residual=residual)
+
+
+def avg_graph_pool(seq, edge_feats, kernel_sz, dist_thresh):
+    dist_neigh = tf.cast(edge_feats[:, :, :, 0] < dist_thresh, tf.float32)
+    dist_neigh = tf.nn.softmax(dist_neigh)
+    pooled_seq = tf.matmul(dist_neigh, seq)
+    pooled_seq = seq[:, ::kernel_sz, :]
+    pooled_edge_feats = edge_feats[:, ::kernel_sz, ::kernel_sz, :]
+
+    return pooled_seq, pooled_edge_feats
+
+
 def attn_head(seq, out_sz, bias_mat, activation,
+              reg_constant, is_training, bn_decay, scope,
               in_drop=0.0, coef_drop=0.0, residual=False):
     """
     Layer originally from github.com/PetarV-/GAT
     """
-    with tf.name_scope('my_attn'):
+    with tf.variable_scope(scope):
         if in_drop != 0.0:
             seq = tf.nn.dropout(seq, 1.0 - in_drop)
 
-        seq_fts = tf.layers.conv1d(seq, out_sz, 1, use_bias=False)
+        # seq_fts = tf.layers.conv1d(seq, out_sz, 1, use_bias=False)
+        seq_fts = conv1d(seq, out_sz, reg_constant, "feat_conv",
+                         activation=None, use_bias=False)
 
         # simplest self-attention possible
         # a_1.(W.h_i)
@@ -31,7 +95,13 @@ def attn_head(seq, out_sz, bias_mat, activation,
             seq_fts = tf.nn.dropout(seq_fts, 1.0 - in_drop)
 
         vals = tf.matmul(coefs, seq_fts)
-        ret = tf.contrib.layers.bias_add(vals)
+        biases = bias_variable([out_sz], reg_constant)
+        ret = vals + biases
+
+        ret_bn = batch_norm_for_conv1d(ret,
+                                       is_training=is_training,
+                                       bn_decay=bn_decay,
+                                       scope='bn')
 
         # residual connection
         if residual:
@@ -40,7 +110,7 @@ def attn_head(seq, out_sz, bias_mat, activation,
             else:
                 seq_fts = ret + seq
 
-        return activation(ret)  # activation
+        return activation(ret_bn)  # activation
 
 
 def graph_conv(seq, out_sz, bias_mat, activation,

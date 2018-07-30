@@ -281,6 +281,75 @@ void occupancy_graph_structure(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void edge_feats_adjacency(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
+                          double* adj_mat,
+                          double* edge_feats_mat,
+                          std::vector<int> & sampled_indices,
+                          std::vector<std::vector<std::vector<int> > > &lut_,
+                          Parameters & p) {
+  int index1, index2;
+  float d, occ_r, a12, a12n1, a12n2;
+  float feat_min = -0.5;
+  float feat_max =  0.5;
+
+
+  for (uint pt1=0; pt1<sampled_indices.size(); pt1++) {
+    for (uint pt2=pt1; pt2<sampled_indices.size(); pt2++) {
+
+      // if (!adj_mat[p.nodes_nb*pt1 + pt2])
+      //   continue;
+
+      if (pt1 == pt2) {
+        edge_feats_mat[5*(p.nodes_nb*pt1 + pt2) + 0] = -0.5;
+        edge_feats_mat[5*(p.nodes_nb*pt1 + pt2) + 1] =  0.5;
+        edge_feats_mat[5*(p.nodes_nb*pt1 + pt2) + 2] =  0.5;
+        edge_feats_mat[5*(p.nodes_nb*pt1 + pt2) + 3] = -0.5;
+        edge_feats_mat[5*(p.nodes_nb*pt1 + pt2) + 4] = -0.5;
+        continue;
+      }
+
+      index1 = sampled_indices[pt1];
+      index2 = sampled_indices[pt2];
+
+      // Vector setup
+      Eigen::Vector4f v1 = pc->points[index1].getVector4fMap ();
+      Eigen::Vector4f v2 = pc->points[index2].getVector4fMap ();
+      Eigen::Vector4f n1 = pc->points[index1].getNormalVector4fMap ();
+      Eigen::Vector4f n2 = pc->points[index2].getNormalVector4fMap ();
+      Eigen::Vector4f v12 = v1 - v2;
+
+      // Feature computation
+      d = v12.norm() / (p.gridsize) - 0.5;
+      v12.normalize();
+      occ_r = occupancy_ratio(v1, v2, lut_, p.gridsize/2) - 0.5;
+      a12 = n1.dot(n2)/2;
+      a12n1 = fabs(v12.dot(n1)) - 0.5;
+      a12n2 = fabs(v12.dot(n2)) - 0.5;
+
+      // Saturate the features
+
+      d = std::min(std::max(d, feat_min), feat_max);
+      a12 = std::min(std::max(a12, feat_min), feat_max);
+      a12n1 = std::min(std::max(a12n1, feat_min), feat_max);
+      a12n2 = std::min(std::max(a12n2, feat_min), feat_max);
+
+      // Fill in the matrix
+      edge_feats_mat[5*(p.nodes_nb*pt1 + pt2) + 0] = d;
+      edge_feats_mat[5*(p.nodes_nb*pt2 + pt1) + 0] = d;
+      edge_feats_mat[5*(p.nodes_nb*pt1 + pt2) + 1] = occ_r;
+      edge_feats_mat[5*(p.nodes_nb*pt2 + pt1) + 1] = occ_r;
+      edge_feats_mat[5*(p.nodes_nb*pt1 + pt2) + 2] = a12;
+      edge_feats_mat[5*(p.nodes_nb*pt2 + pt1) + 2] = a12;
+      edge_feats_mat[5*(p.nodes_nb*pt1 + pt2) + 3] = a12n1;
+      edge_feats_mat[5*(p.nodes_nb*pt2 + pt1) + 3] = a12n1;
+      edge_feats_mat[5*(p.nodes_nb*pt1 + pt2) + 4] = a12n2;
+      edge_feats_mat[5*(p.nodes_nb*pt2 + pt1) + 4] = a12n2;
+    }
+  }
+}
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void compute_graph(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
                    pcl::search::KdTree<pcl::PointXYZINormal>::Ptr tree,
                    std::vector<int> & sampled_indices,
@@ -307,4 +376,36 @@ void compute_graph(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
 
   // Graph structure
   occupancy_graph_structure(pc, adj_mat, sampled_indices, lut_, params);
+}
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void compute_edge_graph(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
+                   pcl::search::KdTree<pcl::PointXYZINormal>::Ptr tree,
+                   std::vector<int> & sampled_indices,
+                   double* adj_mat,
+                   double* edge_feats_mat,
+                   Parameters params) {
+  // Sample graph nodes
+  srand (static_cast<unsigned int> (time (0)));
+  sample_local_points(pc, sampled_indices, *tree, params);
+
+  if (params.debug)
+    std::cout << "Salient points sampled: " << sampled_indices.size() << std::endl;
+
+
+  // Voxelization
+  std::vector<std::vector<std::vector<int> > > lut_;
+  lut_.resize (params.gridsize);
+  for (uint i = 0; i < params.gridsize; ++i) {
+      lut_[i].resize (params.gridsize);
+      for (uint j = 0; j < params.gridsize; ++j)
+        lut_[i][j].resize (params.gridsize);
+  }
+  voxelize (*pc, lut_, params.gridsize);
+
+
+  // Graph structure
+  occupancy_graph_structure(pc, adj_mat, sampled_indices, lut_, params);
+  edge_feats_adjacency(pc, adj_mat, edge_feats_mat, sampled_indices, lut_, params);
 }

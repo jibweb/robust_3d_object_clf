@@ -126,7 +126,63 @@ int compute_graph_feats(std::string filename,
       shot_features(pc, node_feats, sampled_indices, tree, params);
     else if (params.feat_nb == 33)
       fpfh_features(pc, node_feats, sampled_indices, tree, params);
+    else if (params.feat_nb == 3)
+      points_coords_features(pc, node_feats, sampled_indices, tree, params);
+  }
 
+  if (params.viz)
+    graph_viz(pc, sampled_indices, adj_mat, params);
+
+  return 0;
+}
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+int compute_graph_edge_feats(std::string filename,
+                             double* node_feats,
+                             double* adj_mat,
+                             double* edge_feats_mat,
+                             Parameters params){
+  ScopeTime total("Total time", params.debug);
+
+  // Point cloud reading
+  pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc(new pcl::PointCloud<pcl::PointXYZINormal>);
+  {
+    ScopeTime t("Point Cloud reading", params.debug);
+    if (pcl::io::loadPCDFile<pcl::PointXYZINormal> (filename.c_str(), *pc) == -1) {
+      PCL_ERROR("Couldn't read %s file \n", filename.c_str());
+      return (-1);
+    }
+  }
+
+  // Data corruption (occlusion, noise, downsampling, ...)
+  {
+    ScopeTime t("Data preprocessing/augmentation", params.debug);
+
+    Eigen::Vector4f centroid;
+    scale_points_unit_sphere (*pc, params.gridsize/2, centroid);
+    params.neigh_size = params.neigh_size * params.gridsize/2;
+    augment_data(pc, params);
+  }
+
+  // Construct the graph
+  pcl::search::KdTree<pcl::PointXYZINormal>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZINormal>);
+  tree->setInputCloud (pc);
+  std::vector<int> sampled_indices;
+  {
+    ScopeTime t("Graph construction", params.debug);
+    compute_edge_graph(pc, tree, sampled_indices, adj_mat, edge_feats_mat, params);
+  }
+
+  // Compute the node features
+  {
+    ScopeTime t("Local features computation", params.debug);
+    if (params.feat_nb == 352)
+      shot_features(pc, node_feats, sampled_indices, tree, params);
+    else if (params.feat_nb == 33)
+      fpfh_features(pc, node_feats, sampled_indices, tree, params);
+    else if (params.feat_nb == 3)
+      points_coords_features(pc, node_feats, sampled_indices, tree, params);
   }
 
   if (params.viz)
@@ -174,6 +230,56 @@ int compute_graph_feats3d(std::string filename,
   }
 
 
+  {
+    ScopeTime t("Local features computation", params.debug);
+    esf3d_features(pc, node_feats, sampled_indices, tree, params);
+  }
+
+  if (params.viz)
+    graph_viz(pc, sampled_indices, adj_mat, params);
+
+  return 0;
+}
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+int compute_graph_edge_feats3d(std::string filename,
+                               double** node_feats,
+                               double* adj_mat,
+                               double* edge_feats_mat,
+                               Parameters params){
+  ScopeTime total("Total time", params.debug);
+
+  // Point cloud reading
+  pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc(new pcl::PointCloud<pcl::PointXYZINormal>);
+  {
+    ScopeTime t("Point Cloud reading", params.debug);
+    if (pcl::io::loadPCDFile<pcl::PointXYZINormal> (filename.c_str(), *pc) == -1) {
+      PCL_ERROR("Couldn't read %s file \n", filename.c_str());
+      return (-1);
+    }
+  }
+
+  // Data corruption (occlusion, noise, downsampling, ...)
+  {
+    ScopeTime t("Data preprocessing/augmentation", params.debug);
+
+    Eigen::Vector4f centroid;
+    scale_points_unit_sphere (*pc, params.gridsize/2, centroid);
+    params.neigh_size = params.neigh_size * params.gridsize/2;
+    augment_data(pc, params);
+  }
+
+  // Construct the graph
+  pcl::search::KdTree<pcl::PointXYZINormal>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZINormal>);
+  tree->setInputCloud (pc);
+  std::vector<int> sampled_indices;
+  {
+    ScopeTime t("Graph construction", params.debug);
+    compute_edge_graph(pc, tree, sampled_indices, adj_mat, edge_feats_mat, params);
+  }
+
+  // Compute the node features
   {
     ScopeTime t("Local features computation", params.debug);
     esf3d_features(pc, node_feats, sampled_indices, tree, params);
