@@ -1,71 +1,51 @@
-import itertools
-from utils.logger import log, set_log_level, TimeScope
+import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import tensorflow as tf
 
-from dataset import get_dataset
+from dataset import get_dataset, DATASETS
 from preprocessing import get_graph_preprocessing_fn
-from train import Model, MODEL_NAME, DATASET, SAVE_DIR
+from train import Model, MODEL_NAME, DATASET, DEFAULT_PARAMS_FILE
+from utils.logger import log, set_log_level, TimeScope
 from utils.params import params as p
+from utils.viz import plot_confusion_matrix
 
-Dataset, CLASS_DICT = get_dataset(DATASET)
 # ---- Parameters ----
-
-# Model parameters
-# ...
-# SAVE_DIR = "../saved_output/ModelNet10_clean/"
-
 # Generic
-# p.batch_size = 20
 set_log_level("INFO")
-p.define("test_repeat", 5)
-p.define("model_ckpt", "model_2990/model.ckpt")
-
-
-# --------------------
-
-
-def plot_confusion_matrix(cm, classes,
-                          normalize=True,
-                          title='Confusion matrix',
-                          cmap=plt.cm.Blues):
-    """
-    This function prints and plots the confusion matrix.
-    Normalization can be applied by setting `normalize=True`.
-    """
-    if normalize:
-        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-
-    plt.imshow(cm, interpolation='nearest', cmap=cmap)
-    plt.title(title)
-    plt.colorbar()
-    tick_marks = np.arange(len(classes))
-    plt.xticks(tick_marks, classes, rotation=45)
-    plt.yticks(tick_marks, classes)
-
-    fmt = '.2f' if normalize else 'd'
-    thresh = cm.max() / 2.
-    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
-        plt.text(j, i, format(cm[i, j], fmt),
-                 horizontalalignment="center",
-                 color="white" if cm[i, j] > thresh else "black")
-
-    plt.tight_layout()
-    plt.ylabel('True label')
-    plt.xlabel('Predicted label')
+TEST_REPEAT = 3
+MODEL_CKPT = "model_960/model.ckpt"
 
 
 if __name__ == "__main__":
-    # Clean previous experiments logs
+    # === SETUP ===============================================================
+    # --- Parse arguments for specific params file ----------------------------
+    parser = argparse.ArgumentParser("Test a given model on a given dataset")
+    parser.add_argument("--params", type=str, help="params file to load",
+                        default=DEFAULT_PARAMS_FILE)
+    parser.add_argument("--dataset", type=str, help="Dataset to train on")
+    args = parser.parse_args()
+
+    p.load(args.params)
+    if args.dataset:
+        DATASET = DATASETS[args.dataset]
+        Dataset, CLASS_DICT = get_dataset(DATASET)
+        p.num_classes = len(CLASS_DICT)
+
+    EXPERIMENT_VERSION = p.get_hash()
+    SAVE_DIR = "output_save/{}_{}_{}/".format(DATASET.name,
+                                              MODEL_NAME,
+                                              EXPERIMENT_VERSION)
+
     os.system("rm -rf {}test_tb/*".format(SAVE_DIR))
     p.load("params/{}_{}.yaml".format(DATASET.name, MODEL_NAME))
 
-    # === SETUP ===============================================================
-    # --- Pre processing function setup -----------------------------------
+    # --- Pre processing function setup ---------------------------------------
     feat_compute = get_graph_preprocessing_fn(p)
+
     # --- Dataset setup -------------------------------------------------------
+    Dataset, CLASS_DICT = get_dataset(DATASET)
     dataset = Dataset(batch_size=p.batch_size,
                       val_set_pct=p.val_set_pct)
 
@@ -92,7 +72,7 @@ if __name__ == "__main__":
 
     # === GRAPH COMPUTATION ===================================================
     with tf.Session() as sess:
-        saver.restore(sess, SAVE_DIR + p.model_ckpt)
+        saver.restore(sess, SAVE_DIR + MODEL_CKPT)
 
         # Summaries Writer
         test_writer = tf.summary.FileWriter(SAVE_DIR + 'test_tb')
@@ -105,7 +85,7 @@ if __name__ == "__main__":
         total_acc = 0.
         total_cm = np.zeros((p.num_classes, p.num_classes), dtype=np.int32)
 
-        for repeat in range(p.test_repeat):
+        for repeat in range(TEST_REPEAT):
             for xs, ys in dataset.test_batch(process_fn=feat_compute):
                 with TimeScope("accuracy", debug_only=True):
                     summary, acc, loss, cm = sess.run(
