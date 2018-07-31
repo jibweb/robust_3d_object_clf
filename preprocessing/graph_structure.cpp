@@ -2,6 +2,7 @@
 #include <math.h>
 
 #include <pcl/features/normal_3d.h>
+#include <pcl/features/shot_lrf.h>
 #include <pcl/point_types.h>
 
 #include "parameters.h"
@@ -166,6 +167,22 @@ float inline occupancy_ratio(Eigen::Vector4f & v1, Eigen::Vector4f & v2,
   return ratio;
 }
 
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+float inline occupancy_ratio(Eigen::Vector3f & v1, Eigen::Vector3f & v2,
+                           std::vector<std::vector<std::vector<int> > > &lut_, int gridsize_h) {
+  int vxlcnt, pcnt;
+  float ratio;
+
+  const int xs = v1[0] < 0.0? static_cast<int>(floor(v1[0])+gridsize_h): static_cast<int>(ceil(v1[0])+gridsize_h-1);
+  const int ys = v1[1] < 0.0? static_cast<int>(floor(v1[1])+gridsize_h): static_cast<int>(ceil(v1[1])+gridsize_h-1);
+  const int zs = v1[2] < 0.0? static_cast<int>(floor(v1[2])+gridsize_h): static_cast<int>(ceil(v1[2])+gridsize_h-1);
+  const int xt = v2[0] < 0.0? static_cast<int>(floor(v2[0])+gridsize_h): static_cast<int>(ceil(v2[0])+gridsize_h-1);
+  const int yt = v2[1] < 0.0? static_cast<int>(floor(v2[1])+gridsize_h): static_cast<int>(ceil(v2[1])+gridsize_h-1);
+  const int zt = v2[2] < 0.0? static_cast<int>(floor(v2[2])+gridsize_h): static_cast<int>(ceil(v2[2])+gridsize_h-1);
+  lci (lut_, xs, ys, zs, xt, yt, zt, ratio, vxlcnt, pcnt);
+  return ratio;
+}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void sample_local_points(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
@@ -369,7 +386,7 @@ void coords_feats_adjacency(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
   boost::shared_ptr<std::vector<int> > sampled_indices_ptr(new std::vector<int> (sampled_indices));
 
   pcl::SHOTLocalReferenceFrameEstimation<pcl::PointXYZINormal, pcl::ReferenceFrame> lrf_estimator;
-  lrf_estimator.setRadiusSearch (p.neigh_size);
+  lrf_estimator.setRadiusSearch (2*p.neigh_size);
   lrf_estimator.setInputCloud (pc);
   lrf_estimator.setSearchMethod (tree);
   lrf_estimator.setIndices (sampled_indices_ptr);
@@ -385,9 +402,12 @@ void coords_feats_adjacency(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
     if (std::isnan(local_rf(0)) ||
         std::isnan(local_rf(1)) ||
         std::isnan(local_rf(2))){
-      std::cout << "Garbage LRF: " << pt1_idx << std::endl;
-      for (uint i=0; i<p.nodes_nb; i++)
-        adj_mat[p.nodes_nb*pt1_idx + i] = 0;
+      if (p.debug)
+        std::cout << "Garbage LRF: " << pt1_idx << std::endl;
+      for (uint i=0; i<p.nodes_nb; i++) {
+        edge_feats_mat[6*(p.nodes_nb*pt1_idx + i) + 0] = 2.;
+        edge_feats_mat[6*(p.nodes_nb*pt1_idx + i) + 5] = -1.;
+      }
       continue;
     }
 
@@ -395,17 +415,17 @@ void coords_feats_adjacency(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
       index2 = sampled_indices[pt2_idx];
       Eigen::Vector3f v2 = pc->points[index2].getVector3fMap();
       Eigen::Vector4f n2 = pc->points[index2].getNormalVector4fMap ();
-      Eigen::Vector4f v12 = v2 - v1;
+      Eigen::Vector3f v21 = v2 - v1;
       Eigen::Vector3f new_coords = local_rf * v21;
-      d = v12.norm() / (p.gridsize);
-      v12.normalize();
+      d = v21.norm() / (p.gridsize) - 0.5;
+      v21.normalize();
       occ_r = occupancy_ratio(v1, v2, lut_, p.gridsize/2);
       a12 = n1.dot(n2)/2;
 
       edge_feats_mat[6*(p.nodes_nb*pt1_idx + pt2_idx) + 0] = d;
-      edge_feats_mat[6*(p.nodes_nb*pt1_idx + pt2_idx) + 1] = new_coords(0);
-      edge_feats_mat[6*(p.nodes_nb*pt1_idx + pt2_idx) + 2] = new_coords(1);
-      edge_feats_mat[6*(p.nodes_nb*pt1_idx + pt2_idx) + 3] = new_coords(2);
+      edge_feats_mat[6*(p.nodes_nb*pt1_idx + pt2_idx) + 1] = new_coords(0) / p.gridsize;
+      edge_feats_mat[6*(p.nodes_nb*pt1_idx + pt2_idx) + 2] = new_coords(1) / p.gridsize;
+      edge_feats_mat[6*(p.nodes_nb*pt1_idx + pt2_idx) + 3] = new_coords(2) / p.gridsize;
       edge_feats_mat[6*(p.nodes_nb*pt1_idx + pt2_idx) + 4] = a12;
       edge_feats_mat[6*(p.nodes_nb*pt1_idx + pt2_idx) + 5] = occ_r;
     }
@@ -470,6 +490,10 @@ void compute_edge_graph(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
 
 
   // Graph structure
-  occupancy_graph_structure(pc, adj_mat, sampled_indices, lut_, params);
-  edge_feats_adjacency(pc, adj_mat, edge_feats_mat, sampled_indices, lut_, params);
+  // occupancy_graph_structure(pc, adj_mat, sampled_indices, lut_, params);
+  if (params.edge_feat_nb == 5)
+    edge_feats_adjacency(pc, adj_mat, edge_feats_mat, sampled_indices, lut_, params);
+  else if (params.edge_feat_nb == 6)
+    coords_feats_adjacency(pc, adj_mat, edge_feats_mat, tree, sampled_indices, lut_, params);
+
 }

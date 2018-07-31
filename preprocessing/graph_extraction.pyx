@@ -12,6 +12,7 @@ cdef extern from "wrapper_interface.cpp":
         # Graph structure
         unsigned int nodes_nb
         unsigned int feat_nb
+        unsigned int edge_feat_nb
         float neigh_size
         unsigned int neigh_nb
         # General
@@ -85,6 +86,7 @@ def get_edge_graph_feats(filename, **kwargs):
     cdef Parameters params
     params.nodes_nb = kwargs.get("nodes_nb")
     params.feat_nb = kwargs.get("feat_nb")
+    params.edge_feat_nb = kwargs.get("edge_feat_nb")
     params.neigh_size = kwargs.get("neigh_size")
     params.neigh_nb = kwargs.get("neigh_nb")
 
@@ -104,7 +106,7 @@ def get_edge_graph_feats(filename, **kwargs):
 
     cdef np.ndarray[double, ndim=3, mode="c"] edge_feats_mat = np.zeros([params.nodes_nb,
                                                                          params.nodes_nb,
-                                                                         5],
+                                                                         params.edge_feat_nb],
                                                                         dtype=np.float64)
 
     cdef np.ndarray[double, ndim=2, mode="c"] node_feats = np.zeros([params.nodes_nb,
@@ -158,6 +160,7 @@ def get_edge_graph_feats3d(filename, **kwargs):
     cdef Parameters params
     params.nodes_nb = kwargs.get("nodes_nb")
     params.feat_nb = kwargs.get("feat_nb")
+    params.edge_feat_nb = kwargs.get("edge_feat_nb")
     params.neigh_size = kwargs.get("neigh_size")
     params.neigh_nb = kwargs.get("neigh_nb")
 
@@ -177,7 +180,7 @@ def get_edge_graph_feats3d(filename, **kwargs):
 
     cdef np.ndarray[double, ndim=3, mode="c"] edge_feats_mat = np.zeros([params.nodes_nb,
                                                                          params.nodes_nb,
-                                                                         5],
+                                                                         params.edge_feat_nb],
                                                                         dtype=np.float64)
 
     cdef double **node_feats3d_ptr = <double **> malloc(params.nodes_nb*sizeof(double *))

@@ -32,7 +32,8 @@ class Model(object):
             self.edge_feats = tf.placeholder(tf.float32,
                                              (None,
                                               p.nodes_nb,
-                                              p.nodes_nb, 5),
+                                              p.nodes_nb,
+                                              p.edge_feat_nb),
                                              name="edge_feats")
             if p.feats_3d:
                 self.node_feats = tf.placeholder(tf.float32,

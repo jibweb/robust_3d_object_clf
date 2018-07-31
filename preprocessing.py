@@ -11,6 +11,7 @@ from graph_extraction import get_graph_feats, get_graph_feats3d,\
 # Graph structure
 p.define("nodes_nb", 128)
 p.define("feat_nb", 4)
+p.define("edge_feat_nb", 5)
 p.define("neigh_size", 0.15)
 p.define("neigh_nb", 5)
 p.define("gridsize", 64)
