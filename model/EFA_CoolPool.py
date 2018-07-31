@@ -4,7 +4,7 @@ from utils.logger import TimeScope
 from utils.tf import fc, fc_bn, define_scope
 from utils.params import params as p
 
-from layers import neighboring_edge_attn, avg_graph_pool, conv1d_bn, conv3d
+from layers import mh_neighboring_edge_attn, avg_graph_pool, conv1d_bn, conv3d
 
 MODEL_NAME = "EFA_CoolPool"
 
@@ -34,7 +34,8 @@ class Model(object):
             self.edge_feats = tf.placeholder(tf.float32,
                                              (None,
                                               p.nodes_nb,
-                                              p.nodes_nb, 5),
+                                              p.nodes_nb,
+                                              p.edge_feat_nb),
                                              name="edge_feats")
             if p.feats_3d:
                 self.node_feats = tf.placeholder(tf.float32,
@@ -130,23 +131,12 @@ class Model(object):
 
             # Apply all convolutions
             for i in range(len(p.graph_hid_units)):
-                with tf.variable_scope("attn_heads_" + str(i)):
-                    gcn_heads = []
-                    for head_idx in range(p.attn_head_nb[i]):
-                        gcn_heads.append(
-                            neighboring_edge_attn(
-                                feat_gcn,
-                                out_sz=p.graph_hid_units[i],
-                                dist_thresh=p.gcn_dist_thresh[i],
-                                edge_feats=edge_feats,
-                                activation=tf.nn.elu,
-                                reg_constant=p.reg_constant,
-                                is_training=self.is_training,
-                                scope='nefa_h' + str(head_idx),
-                                bn_decay=self.bn_decay,
-                                in_drop=self.feat_drop,
-                                residual=p.residual))
-                    feat_gcn = tf.concat(gcn_heads, axis=-1)
+                feat_gcn = mh_neighboring_edge_attn(
+                    feat_gcn, p.graph_hid_units[i], p.gcn_dist_thresh[i],
+                    edge_feats, p.attn_head_nb[i], tf.nn.elu,
+                    p.reg_constant, self.is_training, self.bn_decay,
+                    "attn_heads_" + str(i), in_drop=0.0, coef_drop=0.0,
+                    residual=False, use_bias_mat=True)
 
                 if p.graph_pool[i]:
                     with tf.variable_scope("graph_pool_" + str(i)):

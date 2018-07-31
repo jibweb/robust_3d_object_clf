@@ -54,6 +54,40 @@ def neighboring_edge_attn(seq, out_sz, dist_thresh, edge_feats, activation,
                          residual=residual)
 
 
+def mh_neighboring_edge_attn(seq, out_sz, dist_thresh, edge_feats, head_nb,
+                             activation, reg_constant, is_training, bn_decay,
+                             scope, in_drop=0.0, coef_drop=0.0, residual=False,
+                             use_bias_mat=True):
+    with tf.variable_scope(scope):
+        neigh_adj = tf.cast(edge_feats[:, :, :, 0] < dist_thresh, tf.float32)
+        neigh_bias = -1e9 * (1.0 - neigh_adj)
+
+        gcn_heads = []
+        # edge feature attention
+        logits = conv2d(edge_feats, head_nb, 1, reg_constant, "edge_feat_attn")
+
+        for head_idx in range(head_nb):
+            with tf.variable_scope("head_" + str(head_idx)):
+                seq_fts = conv1d_bn(seq, out_sz, reg_constant, is_training,
+                                    "feat_conv", activation=None,
+                                    use_bias=False)
+
+                pre_coefs = tf.nn.leaky_relu(logits[:, :, :, head_idx])
+
+                # bias_mat to reintroduce graph structure
+                if use_bias_mat:
+                    pre_coefs += neigh_bias
+                coefs = tf.nn.softmax(pre_coefs)
+
+                vals = tf.matmul(coefs, seq_fts)
+                biases = bias_variable([out_sz], reg_constant)
+                ret = vals + biases
+
+                gcn_heads.append(activation(ret))
+
+        return tf.concat(gcn_heads, axis=-1)
+
+
 def avg_graph_pool(seq, edge_feats, kernel_sz, dist_thresh):
     dist_neigh = tf.cast(edge_feats[:, :, :, 0] < dist_thresh, tf.float32)
     dist_neigh = tf.nn.softmax(dist_neigh)
