@@ -4,7 +4,7 @@ from utils.logger import TimeScope
 from utils.tf import fc, fc_bn, define_scope
 from utils.params import params as p
 
-from layers import mh_neighboring_edge_attn, avg_graph_pool, conv1d_bn, conv3d
+from layers import mh_neigh_edge_attn, avg_graph_pool, conv1d_bn, conv3d
 
 MODEL_NAME = "EFA_CoolPool"
 
@@ -37,6 +37,11 @@ class Model(object):
                                               p.nodes_nb,
                                               p.edge_feat_nb),
                                              name="edge_feats")
+            self.valid_pts = tf.placeholder(tf.float32,
+                                            [None,
+                                             p.nodes_nb,
+                                             p.nodes_nb],
+                                            name="valid_pts")
             if p.feats_3d:
                 self.node_feats = tf.placeholder(tf.float32,
                                                  (None,
@@ -60,6 +65,8 @@ class Model(object):
             self.pool_drop = tf.placeholder(tf.float32, name="pool_drop_prob")
             self.bn_decay = bn_decay
 
+            self.adj_mask = self.bias_mat < -1.
+
         # --- Model properties ------------------------------------------------
         with TimeScope(MODEL_NAME + "/prop_setup", debug_only=True):
             self.inference
@@ -70,6 +77,7 @@ class Model(object):
         xb_node_feats = [np.array(x_i[0]) for x_i in x_batch]
         xb_bias_mat = [np.array(x_i[1]) for x_i in x_batch]
         xb_edge_feats = [np.array(x_i[2]) for x_i in x_batch]
+        xb_valid_pts = [np.diag(x_i[3]) for x_i in x_batch]
 
         feat_drop = p.feat_drop_prob if is_training else 0.
         pool_drop = p.pool_drop_prob if is_training else 0.
@@ -78,6 +86,7 @@ class Model(object):
             self.node_feats: xb_node_feats,
             self.bias_mat: xb_bias_mat,
             self.edge_feats: xb_edge_feats,
+            self.valid_pts: xb_valid_pts,
             self.y: y_batch,
             self.feat_drop: feat_drop,
             self.pool_drop: pool_drop,
@@ -128,28 +137,35 @@ class Model(object):
             # Pre setup
             feat_gcn = feat_red_out
             edge_feats = self.edge_feats
+            adj_mask = self.adj_mask
 
             # Apply all convolutions
             for i in range(len(p.graph_hid_units)):
-                feat_gcn = mh_neighboring_edge_attn(
+                feat_gcn = mh_neigh_edge_attn(
                     feat_gcn, p.graph_hid_units[i], p.gcn_dist_thresh[i],
-                    edge_feats, p.attn_head_nb[i], tf.nn.elu,
+                    edge_feats, p.attn_head_nb[i], adj_mask, tf.nn.elu,
                     p.reg_constant, self.is_training, self.bn_decay,
                     "attn_heads_" + str(i), in_drop=0.0, coef_drop=0.0,
                     residual=False, use_bias_mat=True)
 
                 if p.graph_pool[i]:
                     with tf.variable_scope("graph_pool_" + str(i)):
-                        feat_gcn, edge_feats = avg_graph_pool(
+                        feat_gcn, edge_feats, adj_mask = avg_graph_pool(
                             feat_gcn, edge_feats,
-                            8,
+                            4, adj_mask,
                             p.gcn_dist_thresh[i])
 
             gcn_out = feat_gcn
 
         # --- Set Pooling -----------------------------------------------------
         with tf.variable_scope('graph_pool'):
-            max_gg = tf.reduce_max(gcn_out, axis=1, name='max_g')
+            valid_pts = self.valid_pts
+            for i in range(len(p.graph_pool)):
+                if p.graph_pool[i]:
+                    valid_pts = valid_pts[:, ::4, ::4]
+
+            gcn_filt = tf.matmul(valid_pts, gcn_out)
+            max_gg = tf.reduce_max(gcn_filt, axis=1, name='max_g')
             fcg = fc_bn(max_gg, p.graph_hid_units[-1]*p.attn_head_nb[-1],
                         scope='fcg',
                         is_training=self.is_training,

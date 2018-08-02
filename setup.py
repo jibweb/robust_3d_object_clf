@@ -77,8 +77,8 @@ print "\n\n"
 setup(
     name='Graph Structure Estimation',
     ext_modules=cythonize(Extension(
-        "graph_extraction",
-        ["preprocessing/graph_extraction.pyx"],
+        "py_graph_construction",
+        ["preprocessing/py_graph_construction.pyx"],
         language="c++",
         **ext_args))
 )

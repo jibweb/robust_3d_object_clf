@@ -1,4 +1,4 @@
-hellomake: preprocessing/augmentation_preprocessing.cpp preprocessing/features_computation.cpp \
-           preprocessing/graph_structure.cpp preprocessing/parameters.h \
-           preprocessing/wrapper_interface.cpp preprocessing/graph_extraction.pyx
+hellomake: preprocessing/augmentation_preprocessing.cpp preprocessing/graph_construction.cpp \
+           preprocessing/graph_construction.h preprocessing/parameters.h \
+           preprocessing/wrapper_interface.cpp preprocessing/py_graph_construction.pyx
 	python setup.py build_ext -i --force

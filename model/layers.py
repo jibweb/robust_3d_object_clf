@@ -54,13 +54,14 @@ def neighboring_edge_attn(seq, out_sz, dist_thresh, edge_feats, activation,
                          residual=residual)
 
 
-def mh_neighboring_edge_attn(seq, out_sz, dist_thresh, edge_feats, head_nb,
-                             activation, reg_constant, is_training, bn_decay,
-                             scope, in_drop=0.0, coef_drop=0.0, residual=False,
-                             use_bias_mat=True):
+def mh_neigh_edge_attn(seq, out_sz, dist_thresh, edge_feats, head_nb, adj_mask,
+                       activation, reg_constant, is_training, bn_decay,
+                       scope, in_drop=0.0, coef_drop=0.0, residual=False,
+                       use_bias_mat=True):
     with tf.variable_scope(scope):
-        neigh_adj = tf.cast(edge_feats[:, :, :, 0] < dist_thresh, tf.float32)
-        neigh_bias = -1e9 * (1.0 - neigh_adj)
+        neigh_mask = edge_feats[:, :, :, 0] < dist_thresh
+        neigh_mask = tf.logical_and(neigh_mask, adj_mask)
+        neigh_bias = -1e9 * (1.0 - tf.cast(neigh_mask, tf.float32))
 
         gcn_heads = []
         # edge feature attention
@@ -88,14 +89,17 @@ def mh_neighboring_edge_attn(seq, out_sz, dist_thresh, edge_feats, head_nb,
         return tf.concat(gcn_heads, axis=-1)
 
 
-def avg_graph_pool(seq, edge_feats, kernel_sz, dist_thresh):
-    dist_neigh = tf.cast(edge_feats[:, :, :, 0] < dist_thresh, tf.float32)
+def avg_graph_pool(seq, edge_feats, kernel_sz, adj_mask, dist_thresh):
+    dist_mask = edge_feats[:, :, :, 0] < dist_thresh
+    dist_mask = tf.logical_and(dist_mask, adj_mask)
+    dist_neigh = tf.cast(dist_mask, tf.float32)
     dist_neigh = tf.nn.softmax(dist_neigh)
     pooled_seq = tf.matmul(dist_neigh, seq)
     pooled_seq = seq[:, ::kernel_sz, :]
     pooled_edge_feats = edge_feats[:, ::kernel_sz, ::kernel_sz, :]
+    pooled_adj_mask = adj_mask[:, ::kernel_sz, ::kernel_sz]
 
-    return pooled_seq, pooled_edge_feats
+    return pooled_seq, pooled_edge_feats, pooled_adj_mask
 
 
 def attn_head(seq, out_sz, bias_mat, activation,

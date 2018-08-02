@@ -11,8 +11,11 @@ struct Parameters
   // Graph structure
   unsigned int nodes_nb;
   unsigned int feat_nb;
+  unsigned int edge_feat_nb;
   float neigh_size;
-  unsigned int neigh_nb;
+  int neigh_nb;
+  bool feats_3d;
+  bool edge_feats;
   // General
   unsigned int gridsize;
   bool viz;

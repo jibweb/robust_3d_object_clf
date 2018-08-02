@@ -1,11 +1,8 @@
 from functools import partial
 import numpy as np
-# import os
-from utils.params import params as p
 
-# os.system("python setup.py build_ext -i")
-from graph_extraction import get_graph_feats, get_graph_feats3d,\
-                             get_edge_graph_feats, get_edge_graph_feats3d
+from utils.params import params as p
+from py_graph_construction import get_graph, get_graph_3d
 
 
 # Graph structure
@@ -65,65 +62,40 @@ def preprocess_esf3d(feats):
     return np.array(feats)[..., np.newaxis]
 
 
-def graph_preprocess(fn, p, preprocess_feats, preprocess_adj):
-    feats, adj = get_graph_feats(fn, p.__dict__)
-    feats = preprocess_feats(feats)
-    adj = preprocess_adj(adj)
-
-    return feats, adj
-
-
-def graph_preprocess_3d(fn, p, preprocess_feats, preprocess_adj):
-    feats, adj = get_graph_feats3d(fn, **p.__dict__)
-    feats = preprocess_feats(feats)
-    adj = preprocess_adj(adj)
-
-    return feats, adj
-
-
-def edge_graph_preprocess_3d(fn, p, preprocess_feats, preprocess_adj,
-                             preprocess_edge_feats):
-    feats, adj, edge_feats = get_edge_graph_feats3d(fn, **p.__dict__)
+def graph_preprocess_3d(fn, p, preprocess_feats, preprocess_adj,
+                        preprocess_edge_feats):
+    feats, adj, edge_feats, valid_indices = get_graph_3d(fn, **p.__dict__)
     feats = preprocess_feats(feats)
     adj = preprocess_adj(adj)
     edge_feats = preprocess_edge_feats(edge_feats)
 
-    return feats, adj, edge_feats
+    return feats, adj, edge_feats, valid_indices
 
 
-def edge_graph_preprocess(fn, p, preprocess_feats, preprocess_adj,
-                          preprocess_edge_feats):
-    feats, adj, edge_feats = get_edge_graph_feats(fn, **p.__dict__)
+def graph_preprocess(fn, p, preprocess_feats, preprocess_adj,
+                     preprocess_edge_feats):
+    feats, adj, edge_feats, valid_indices = get_graph(fn, **p.__dict__)
     feats = preprocess_feats(feats)
     adj = preprocess_adj(adj)
     edge_feats = preprocess_edge_feats(edge_feats)
 
-    return feats, adj, edge_feats
+    return feats, adj, edge_feats, valid_indices
 
 
 def get_graph_preprocessing_fn(p):
-    if p.edge_feats:
-        if p.feats_3d:
-            return partial(edge_graph_preprocess_3d, p=p,
-                           preprocess_feats=preprocess_esf3d,
+    if p.feats_3d:
+        return partial(graph_preprocess_3d, p=p,
+                       preprocess_feats=preprocess_esf3d,
+                       preprocess_adj=preprocess_adj_to_bias,
+                       preprocess_edge_feats=preprocess_dummy)
+    else:
+        if p.feat_nb == 33:
+            return partial(graph_preprocess, p=p,
+                           preprocess_feats=preprocess_fpfh,
                            preprocess_adj=preprocess_adj_to_bias,
                            preprocess_edge_feats=preprocess_dummy)
         else:
-            return partial(edge_graph_preprocess, p=p,
+            return partial(graph_preprocess, p=p,
                            preprocess_feats=preprocess_dummy,
                            preprocess_adj=preprocess_adj_to_bias,
                            preprocess_edge_feats=preprocess_dummy)
-    else:
-        if p.feats_3d:
-            return partial(graph_preprocess_3d, p=p,
-                           preprocess_feats=preprocess_esf3d,
-                           preprocess_adj=preprocess_adj_to_bias)
-        else:
-            if p.feat_nb == 352:
-                return partial(graph_preprocess, p=p,
-                               preprocess_feats=preprocess_dummy,
-                               preprocess_adj=preprocess_adj_to_bias)
-            elif p.feat_nb == 33:
-                return partial(graph_preprocess, p=p,
-                               preprocess_feats=preprocess_fpfh,
-                               preprocess_adj=preprocess_adj_to_bias)
