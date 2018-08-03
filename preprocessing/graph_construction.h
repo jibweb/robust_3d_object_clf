@@ -4,6 +4,7 @@
 #include "parameters.h"
 #include "augmentation_preprocessing.cpp"
 #include "occupancy.cpp"
+#include "scope_time.h"
 
 class GraphConstructor
 {
@@ -41,6 +42,7 @@ public:
     params_(params) {}
 
   void initialize() {
+    ScopeTime("Initialization", params_.debug);
 
     // Read the point cloud
     if (pcl::io::loadPCDFile<pcl::PointXYZINormal> (filename_.c_str(), *pc_) == -1) {

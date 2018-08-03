@@ -7,7 +7,6 @@
 #include <pcl/point_types.h>
 
 #include "graph_construction.h"
-#include "scope_time.h"
 
 
 
@@ -17,6 +16,7 @@
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void GraphConstructor::computeFeatures1d(double* node_feats) {
+  ScopeTime("Nodes features computation", params_.debug);
   if (params_.feat_nb == 352)
     shotNodeFeatures(node_feats);
   else if (params_.feat_nb == 33)
@@ -30,6 +30,7 @@ void GraphConstructor::computeFeatures1d(double* node_feats) {
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void GraphConstructor::computeFeatures3d(double** node_feats) {
+  ScopeTime("Nodes features computation", params_.debug);
   if (params_.feat_nb == 4)
     esf3dNodeFeatures(node_feats);
 }
@@ -37,6 +38,7 @@ void GraphConstructor::computeFeatures3d(double** node_feats) {
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void GraphConstructor::samplePoints() {
+  ScopeTime("Point sampling computation", params_.debug);
   // Prepare the values for the sampling procedure
   srand (static_cast<unsigned int> (time (0)));
   int rdn_weight, index;
@@ -108,6 +110,7 @@ void GraphConstructor::samplePoints() {
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void GraphConstructor::computeEdgeFeatures(double* edge_feats) {
+  ScopeTime("Edge features computation", params_.debug);
   if (!params_.edge_feats)
     return;
 
@@ -120,6 +123,7 @@ void GraphConstructor::computeEdgeFeatures(double* edge_feats) {
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void GraphConstructor::computeAdjacency(double* adj_mat) {
+  ScopeTime("Adjacency matrix computation", params_.debug);
   if (params_.neigh_nb <= 0) {
     for (uint index1=0; index1 < params_.nodes_nb; index1++) {
       for (uint index2=0; index2 < params_.nodes_nb; index2++) {
@@ -401,6 +405,7 @@ void GraphConstructor::esf3dNodeFeatures(double** result) {
   std::vector< int > k_indices;
   std::vector< float > k_sqr_distances;
   Eigen::Vector4f v1, v2, n1, n2, v12;
+  double dist, na, va;
   uint d_idx, na_idx, va_idx;
   float max_dist = 2*params_.neigh_size;
 
@@ -434,10 +439,13 @@ void GraphConstructor::esf3dNodeFeatures(double** result) {
         v12 = v1 - v2;
 
         // Get the indices
-        d_idx = static_cast<uint>(std::min(std::max(ceil(4*(v12.norm() / max_dist)) - 1, 0.), 3.));
-        na_idx = static_cast<uint>(std::min(std::max(ceil(2*(n1.dot(n2) + 1)) - 1, 0.), 3.));
+        dist = ceil(4*(v12.norm() / max_dist)) - 1;
+        d_idx = static_cast<uint>(std::min(std::max(dist, 0.), 3.));
+        na = ceil(2*(n1.dot(n2) + 1)) - 1;
+        na_idx = static_cast<uint>(std::min(std::max(na, 0.), 3.));
         v12.normalize();
-        va_idx = static_cast<uint>(std::min(std::max(ceil(4*std::max(fabs(v12.dot(n1)), fabs(v12.dot(n2)))) - 1, 0.), 3.));
+        va = ceil(4*std::max(fabs(v12.dot(n1)), fabs(v12.dot(n2)))) - 1;
+        va_idx = static_cast<uint>(std::min(std::max(va, 0.), 3.));
 
         if (na_idx > 3 || d_idx > 3 || va_idx > 3) {
           std::cout << d_idx << " " << na_idx << " " << va_idx << std::endl;
