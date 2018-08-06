@@ -1,4 +1,7 @@
 *.pyc
 *.so
 build
+cmake_build
+CMakeLists.txt
 output_save
+*.sublime-*
