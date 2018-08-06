@@ -8,6 +8,7 @@ int construct_graph(std::string filename,
                     double* edge_feats,
                     int* valid_indices,
                     Parameters params) {
+  ScopeTime t("Full construction", params.debug);
   // Setup
   GraphConstructor gc(filename, params);
   gc.initialize();
@@ -31,6 +32,7 @@ int construct_graph_3d(std::string filename,
                        double* edge_feats,
                        int* valid_indices,
                        Parameters params) {
+  ScopeTime t("Full construction", params.debug);
   // Setup
   GraphConstructor gc(filename, params);
   gc.initialize();

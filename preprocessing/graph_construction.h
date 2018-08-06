@@ -42,7 +42,7 @@ public:
     params_(params) {}
 
   void initialize() {
-    ScopeTime("Initialization", params_.debug);
+    ScopeTime t("Initialization", params_.debug);
 
     // Read the point cloud
     if (pcl::io::loadPCDFile<pcl::PointXYZINormal> (filename_.c_str(), *pc_) == -1) {

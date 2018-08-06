@@ -16,7 +16,7 @@
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void GraphConstructor::computeFeatures1d(double* node_feats) {
-  ScopeTime("Nodes features computation", params_.debug);
+  ScopeTime t("Nodes features computation", params_.debug);
   if (params_.feat_nb == 352)
     shotNodeFeatures(node_feats);
   else if (params_.feat_nb == 33)
@@ -30,7 +30,7 @@ void GraphConstructor::computeFeatures1d(double* node_feats) {
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void GraphConstructor::computeFeatures3d(double** node_feats) {
-  ScopeTime("Nodes features computation", params_.debug);
+  ScopeTime t("Nodes features computation", params_.debug);
   if (params_.feat_nb == 4)
     esf3dNodeFeatures(node_feats);
 }
@@ -38,7 +38,7 @@ void GraphConstructor::computeFeatures3d(double** node_feats) {
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void GraphConstructor::samplePoints() {
-  ScopeTime("Point sampling computation", params_.debug);
+  ScopeTime t("Point sampling computation", params_.debug);
   // Prepare the values for the sampling procedure
   srand (static_cast<unsigned int> (time (0)));
   int rdn_weight, index;
@@ -110,7 +110,7 @@ void GraphConstructor::samplePoints() {
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void GraphConstructor::computeEdgeFeatures(double* edge_feats) {
-  ScopeTime("Edge features computation", params_.debug);
+  ScopeTime t("Edge features computation", params_.debug);
   if (!params_.edge_feats)
     return;
 
@@ -123,7 +123,7 @@ void GraphConstructor::computeEdgeFeatures(double* edge_feats) {
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void GraphConstructor::computeAdjacency(double* adj_mat) {
-  ScopeTime("Adjacency matrix computation", params_.debug);
+  ScopeTime t("Adjacency matrix computation", params_.debug);
   if (params_.neigh_nb <= 0) {
     for (uint index1=0; index1 < params_.nodes_nb; index1++) {
       for (uint index2=0; index2 < params_.nodes_nb; index2++) {
