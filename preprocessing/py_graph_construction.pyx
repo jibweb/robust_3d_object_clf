@@ -27,6 +27,7 @@ cdef extern from "wrapper_interface.cpp":
         unsigned int to_keep
         float occl_pct
         float noise_std
+        unsigned int rotation_deg
 
     int construct_graph(string filename,
                         double* node_feats,
@@ -64,6 +65,7 @@ def get_graph(filename, **kwargs):
     params.to_keep = kwargs.get("to_keep")
     params.occl_pct = kwargs.get("occl_pct")
     params.noise_std = kwargs.get("noise_std")
+    params.rotation_deg = kwargs.get("rotation_deg")
 
     cdef np.ndarray[double, ndim=2, mode="c"] adj_mat = np.zeros([params.nodes_nb,
                                                                   params.nodes_nb],
@@ -106,6 +108,7 @@ def get_graph_3d(filename, **kwargs):
     params.to_keep = kwargs.get("to_keep")
     params.occl_pct = kwargs.get("occl_pct")
     params.noise_std = kwargs.get("noise_std")
+    params.rotation_deg = kwargs.get("rotation_deg")
 
     cdef np.ndarray[double, ndim=2, mode="c"] adj_mat = np.zeros([params.nodes_nb,
                                                                   params.nodes_nb],

@@ -6,7 +6,7 @@
 #include <pcl/filters/filter.h>
 #include <pcl/search/kdtree.h>
 
-
+#define PI 3.14159265
 #include "parameters.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -133,5 +133,24 @@ void augment_data(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
     // Scale to unit sphere
     Eigen::Vector4f xyz_centroid;
     scale_points_unit_sphere (*pc, static_cast<float>(params.gridsize/2), xyz_centroid);
+  }
+
+  if (params.rotation_deg > 0) {
+    int roll = rand() % params.rotation_deg;
+    int pitch = rand() % params.rotation_deg;
+    int yaw = rand() % params.rotation_deg;
+
+    if (params.debug)
+      std::cout << "Rotating the point cloud with angles roll: " << roll
+                << " / pitch: " << pitch
+                << " / yaw: " << yaw
+                << std::endl;
+
+    Eigen::Affine3f transform = Eigen::Affine3f::Identity();
+    transform.translation() << 0.0, 0.0, 0.0;
+    transform.rotate(Eigen::AngleAxisf((roll*M_PI) / 180, Eigen::Vector3f::UnitX()));
+    transform.rotate(Eigen::AngleAxisf((pitch*M_PI) / 180, Eigen::Vector3f::UnitY()));
+    transform.rotate(Eigen::AngleAxisf((yaw*M_PI) / 180, Eigen::Vector3f::UnitZ()));
+    pcl::transformPointCloud(*pc, *pc, transform); //Only rotate target cloud
   }
 }

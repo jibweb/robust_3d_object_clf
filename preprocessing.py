@@ -20,6 +20,7 @@ p.define("to_remove", 0.)
 p.define("to_keep", 5000)
 p.define("occl_pct", 0.)
 p.define("noise_std", 0.)
+p.define("rotation_deg", 0)
 
 p.define("debug", False)
 p.define("viz", False)

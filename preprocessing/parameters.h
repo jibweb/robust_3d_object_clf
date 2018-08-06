@@ -26,6 +26,7 @@ struct Parameters
   unsigned int to_keep;
   float occl_pct;
   float noise_std;
+  unsigned int rotation_deg;
 };
 
 #endif
