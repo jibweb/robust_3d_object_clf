@@ -266,7 +266,7 @@ void GraphConstructor::lrfEdgeFeatures(double* edge_feats) {
   boost::shared_ptr<std::vector<int> > sampled_indices_ptr(new std::vector<int> (sampled_indices_));
 
   pcl::SHOTLocalReferenceFrameEstimation<pcl::PointXYZINormal, pcl::ReferenceFrame> lrf_estimator;
-  lrf_estimator.setRadiusSearch (0.15*params_.gridsize);
+  lrf_estimator.setRadiusSearch (0.35*params_.gridsize);
   lrf_estimator.setInputCloud (pc_);
   lrf_estimator.setSearchMethod (tree_);
   lrf_estimator.setIndices (sampled_indices_ptr);
