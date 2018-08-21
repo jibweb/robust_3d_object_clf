@@ -4,7 +4,8 @@ from utils.logger import TimeScope
 from utils.tf import fc, fc_bn, define_scope
 from utils.params import params as p
 
-from layers import mh_neigh_edge_attn, avg_graph_pool, conv1d_bn, conv3d
+from layers import mh_neigh_edge_attn, avg_graph_pool,\
+                   conv1d_bn, conv3d, g_2d_k
 
 MODEL_NAME = "EFA_CoolPool"
 
@@ -44,13 +45,21 @@ class Model(object):
                                              p.nodes_nb],
                                             name="valid_pts")
             if p.feats_3d:
-                self.node_feats = tf.placeholder(tf.float32,
-                                                 (None,
-                                                  p.nodes_nb,
-                                                  p.feat_nb,
-                                                  p.feat_nb,
-                                                  p.feat_nb, 1),
-                                                 name="node_feats")
+                if p.feat_nb >= 500:
+                    self.node_feats = tf.placeholder(tf.float32,
+                                                     (None,
+                                                      p.nodes_nb,
+                                                      p.feat_nb,
+                                                      5),
+                                                     name="node_feats")
+                else:
+                    self.node_feats = tf.placeholder(tf.float32,
+                                                     (None,
+                                                      p.nodes_nb,
+                                                      p.feat_nb,
+                                                      p.feat_nb,
+                                                      p.feat_nb, 1),
+                                                     name="node_feats")
             else:
                 self.node_feats = tf.placeholder(tf.float32,
                                                  (None,
@@ -159,7 +168,7 @@ class Model(object):
         # --- Features dim reduction ------------------------------------------
         feat_red_out = feat_transfo
         with tf.variable_scope('feat_dim_red'):
-            if p.feats_3d:
+            if p.feats_3d and p.feat_nb == 4:
                 feat_red_out = tf.reshape(feat_red_out, [-1, 4, 4, 4, 1])
                 feat_red_out = conv3d(feat_red_out,
                                       scope="dimred_3d_1",
@@ -181,6 +190,26 @@ class Model(object):
                 feat_red_out = conv1d_bn(feat_red_out,
                                          scope="dimred_flat_2",
                                          out_sz=32,
+                                         reg_constant=p.reg_constant,
+                                         is_training=self.is_training)
+
+            elif p.feats_3d and p.feat_nb >= 500:
+                for i in range(len(p.red_hid_units)):
+                    feat_red_out = g_2d_k(feat_red_out,
+                                          "g2d_" + str(i),
+                                          p.red_hid_units[i],
+                                          self.is_training, self.bn_decay,
+                                          p.reg_constant)
+                feat_red_out = tf.reduce_max(feat_red_out, axis=2,
+                                             name='max_g')
+                feat_red_out = conv1d_bn(feat_red_out,
+                                         scope="fc_1",
+                                         out_sz=p.red_hid_units[-1],
+                                         reg_constant=p.reg_constant,
+                                         is_training=self.is_training)
+                feat_red_out = conv1d_bn(feat_red_out,
+                                         scope="fc_2",
+                                         out_sz=p.red_hid_units[-1]/2,
                                          reg_constant=p.reg_constant,
                                          is_training=self.is_training)
 

@@ -2,7 +2,7 @@ from functools import partial
 import numpy as np
 
 from utils.params import params as p
-from py_graph_construction import get_graph, get_graph_3d
+from py_graph_construction import get_graph, get_graph_nd
 
 
 # Graph structure
@@ -14,6 +14,7 @@ p.define("neigh_nb", 5)
 p.define("gridsize", 64)
 p.define("feats_3d", True)
 p.define("edge_feats", False)
+p.define("mesh", False)
 
 # Data transformation
 p.define("to_remove", 0.)
@@ -63,9 +64,13 @@ def preprocess_esf3d(feats):
     return np.array(feats)[..., np.newaxis]
 
 
+def preprocess_lesf(feats):
+    return np.array(feats)[..., 0]
+
+
 def graph_preprocess_3d(fn, p, preprocess_feats, preprocess_adj,
                         preprocess_edge_feats):
-    feats, adj, edge_feats, valid_indices = get_graph_3d(fn, **p.__dict__)
+    feats, adj, edge_feats, valid_indices = get_graph_nd(fn, **p.__dict__)
     feats = preprocess_feats(feats)
     adj = preprocess_adj(adj)
     edge_feats = preprocess_edge_feats(edge_feats)
@@ -75,7 +80,12 @@ def graph_preprocess_3d(fn, p, preprocess_feats, preprocess_adj,
 
 def graph_preprocess(fn, p, preprocess_feats, preprocess_adj,
                      preprocess_edge_feats):
-    feats, adj, edge_feats, valid_indices = get_graph(fn, **p.__dict__)
+    try:
+        feats, adj, edge_feats, valid_indices = get_graph(fn, **p.__dict__)
+    except:
+        print fn
+        return
+
     feats = preprocess_feats(feats)
     adj = preprocess_adj(adj)
     edge_feats = preprocess_edge_feats(edge_feats)
@@ -85,10 +95,16 @@ def graph_preprocess(fn, p, preprocess_feats, preprocess_adj,
 
 def get_graph_preprocessing_fn(p):
     if p.feats_3d:
-        return partial(graph_preprocess_3d, p=p,
-                       preprocess_feats=preprocess_esf3d,
-                       preprocess_adj=preprocess_adj_to_bias,
-                       preprocess_edge_feats=preprocess_dummy)
+        if p.feat_nb == 4:
+            return partial(graph_preprocess_3d, p=p,
+                           preprocess_feats=preprocess_esf3d,
+                           preprocess_adj=preprocess_adj_to_bias,
+                           preprocess_edge_feats=preprocess_dummy)
+        else:
+            return partial(graph_preprocess_3d, p=p,
+                           preprocess_feats=preprocess_lesf,
+                           preprocess_adj=preprocess_adj_to_bias,
+                           preprocess_edge_feats=preprocess_dummy)
     else:
         if p.feat_nb == 33:
             return partial(graph_preprocess, p=p,

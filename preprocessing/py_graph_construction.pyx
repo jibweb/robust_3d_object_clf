@@ -17,6 +17,7 @@ cdef extern from "wrapper_interface.cpp":
         int neigh_nb
         bint feats_3d
         bint edge_feats
+        bint mesh
         # General
         unsigned int gridsize
         bint viz
@@ -36,7 +37,7 @@ cdef extern from "wrapper_interface.cpp":
                         int* valid_indices,
                         Parameters params)
 
-    int construct_graph_3d(string filename,
+    int construct_graph_nd(string filename,
                            double** node_feats,
                            double* adj_mat,
                            double* edge_feats,
@@ -55,6 +56,7 @@ def get_graph(filename, **kwargs):
     params.neigh_nb = kwargs.get("neigh_nb")
     params.feats_3d = kwargs.get("feats_3d")
     params.edge_feats = kwargs.get("edge_feats")
+    params.mesh = kwargs.get("mesh")
 
     params.gridsize = kwargs.get("gridsize")
     params.viz = kwargs.get("viz")
@@ -83,13 +85,16 @@ def get_graph(filename, **kwargs):
     cdef np.ndarray[int, ndim=1, mode="c"] valid_indices = np.zeros([params.nodes_nb],
                                                                     dtype=np.int32)
 
+    if params.debug:
+        print "### File:", filename
+
     construct_graph(filename, &node_feats[0, 0], &adj_mat[0, 0], &edge_feats_mat[0, 0, 0], &valid_indices[0], params)
     return node_feats, adj_mat, edge_feats_mat, valid_indices
 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def get_graph_3d(filename, **kwargs):
+def get_graph_nd(filename, **kwargs):
     cdef Parameters params
     params.nodes_nb = kwargs.get("nodes_nb")
     params.feat_nb = kwargs.get("feat_nb")
@@ -98,6 +103,7 @@ def get_graph_3d(filename, **kwargs):
     params.neigh_nb = kwargs.get("neigh_nb")
     params.feats_3d = kwargs.get("feats_3d")
     params.edge_feats = kwargs.get("edge_feats")
+    params.mesh = kwargs.get("mesh")
 
     params.gridsize = kwargs.get("gridsize")
     params.viz = kwargs.get("viz")
@@ -119,18 +125,27 @@ def get_graph_3d(filename, **kwargs):
                                                                          params.edge_feat_nb],
                                                                         dtype=np.float64)
 
+    if params.debug:
+        print "\n###\n File:", filename
+
+    if params.feat_nb >= 500:
+        node_shape = [params.feat_nb, 5, 1]
+    else:
+        node_shape = [params.feat_nb, params.feat_nb, params.feat_nb]
+
     cdef double **node_feats3d_ptr = <double **> malloc(params.nodes_nb*sizeof(double *))
     node_feats3d = []
     cdef np.ndarray[double, ndim=3, mode="c"] temp
 
     for i in range(params.nodes_nb):
-        temp = np.zeros([params.feat_nb, params.feat_nb, params.feat_nb],
+        temp = np.zeros(node_shape,
                         dtype=np.float64)
-        node_feats3d_ptr[i]  = &temp[0, 0, 0]
+        node_feats3d_ptr[i] = &temp[0, 0, 0]
+
         node_feats3d.append(temp)
 
     cdef np.ndarray[int, ndim=1, mode="c"] valid_indices = np.zeros([params.nodes_nb],
                                                                     dtype=np.int32)
 
-    construct_graph_3d(filename, node_feats3d_ptr, &adj_mat[0, 0], &edge_feats_mat[0, 0, 0], &valid_indices[0], params)
+    construct_graph_nd(filename, node_feats3d_ptr, &adj_mat[0, 0], &edge_feats_mat[0, 0, 0], &valid_indices[0], params)
     return node_feats3d, adj_mat, edge_feats_mat, valid_indices

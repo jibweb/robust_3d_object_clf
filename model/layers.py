@@ -1,6 +1,7 @@
 import tensorflow as tf
 from utils.tf import conv1d, conv2d, conv1d_bn, conv3d,\
-                     weight_variable, bias_variable, batch_norm_for_conv1d
+                     weight_variable, bias_variable, batch_norm_for_conv1d,\
+                     batch_norm_for_conv2d
 
 
 def edge_attn(seq, out_sz, bias_mat, edge_feats, activation,
@@ -204,4 +205,21 @@ def g_k(tens_in, scope, out_sz, is_training, bn_decay, reg_constant):
                 is_training=is_training,
                 bn_decay=bn_decay,
                 scope='bn')
+        return tf.nn.relu(g_k_norm)
+
+
+def g_2d_k(tens_in, scope, out_sz, is_training, bn_decay, reg_constant):
+    with tf.variable_scope(scope):
+        g_k = conv2d(tens_in, out_sz, 1, reg_constant, "conv",
+                     activation=None)
+        with tf.variable_scope("max_var"):
+            max_var = weight_variable([out_sz], reg_constant)
+            g_k = g_k - tf.expand_dims(max_var*tf.reduce_max(g_k, axis=2,
+                                                             name='max_g'),
+                                       2)
+        g_k_norm = batch_norm_for_conv2d(
+                        g_k,
+                        is_training=is_training,
+                        bn_decay=bn_decay,
+                        scope='bn')
         return tf.nn.relu(g_k_norm)
