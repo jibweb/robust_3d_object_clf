@@ -15,7 +15,7 @@ from utils.viz import plot_confusion_matrix
 # Generic
 set_log_level("INFO")
 TEST_REPEAT = 3
-MODEL_CKPT = "model_960/model.ckpt"
+MODEL_CKPT = "model_230/model.ckpt"
 
 
 if __name__ == "__main__":
@@ -46,8 +46,11 @@ if __name__ == "__main__":
 
     # --- Dataset setup -------------------------------------------------------
     Dataset, CLASS_DICT = get_dataset(DATASET)
+    regex = "/*_full_wnormals_wattention.ply" if p.mesh  \
+            else "/*_full_wnormals_wattention.pcd"
     dataset = Dataset(batch_size=p.batch_size,
-                      val_set_pct=p.val_set_pct)
+                      val_set_pct=p.val_set_pct,
+                      regex=regex)
 
     # --- Model Setup ---------------------------------------------------------
     model = Model()

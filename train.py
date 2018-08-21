@@ -56,6 +56,8 @@ if __name__ == "__main__":
     os.system("mkdir -p " + SAVE_DIR)
 
     # --- Clean previous experiments logs -------------------------------------
+    restore = False
+    start_epoch = 0
     if len(os.listdir(SAVE_DIR)) != 0:
         log("save dir: {}\n", SAVE_DIR)
         if raw_input("A similar experiment was already saved."
@@ -63,7 +65,13 @@ if __name__ == "__main__":
             log("Experiment deleted !\n")
             os.system("rm -rf {}/*".format(SAVE_DIR))
         else:
-            log("Keeping the records, tensorboard might be screwed up\n")
+            log("Restoring the records, tensorboard might be screwed up\n")
+            restore = True
+            max_train_epoch_nb = sorted([int(dirname[6:])
+                                         for dirname in os.listdir(SAVE_DIR)
+                                         if dirname[:5] == "model"])[-1]
+            start_epoch = max_train_epoch_nb + 1
+            last_ckpt = "model_{}/model.ckpt".format(max_train_epoch_nb)
 
     p.save(SAVE_DIR + "params.yaml")
 
@@ -71,8 +79,11 @@ if __name__ == "__main__":
         # --- Pre processing function setup -----------------------------------
         feat_compute = get_graph_preprocessing_fn(p)
         # --- Dataset setup ---------------------------------------------------
+        regex = "/*_full_wnormals_wattention.ply" if p.mesh  \
+            else "/*_full_wnormals_wattention.pcd"
         dataset = Dataset(batch_size=p.batch_size,
-                          val_set_pct=p.val_set_pct)
+                          val_set_pct=p.val_set_pct,
+                          regex=regex)
 
         # --- Model Setup -----------------------------------------------------
         model = Model()
@@ -119,15 +130,18 @@ if __name__ == "__main__":
         sloss_scalar = tf.summary.scalar('val_loss',
                                          sloss)
 
-        # Init
-        sess.run(tf.global_variables_initializer())
+        if restore:
+            saver.restore(sess, SAVE_DIR + last_ckpt)
+        else:
+            # Init
+            sess.run(tf.global_variables_initializer())
 
         # Training
         log("Setup finished, starting training now ... \n\n")
         print "Parameters:"
         print p, "\n"
 
-        for epoch in range(p.max_epochs):
+        for epoch in range(start_epoch, p.max_epochs):
             # --- Training step -----------------------------------------------
             train_iterator = dataset.train_batch(process_fn=feat_compute)
             bar_name = "Epoch {}/{}".format(epoch, p.max_epochs)
