@@ -1,5 +1,4 @@
-#ifndef PARAMS_H
-#define PARAMS_H
+#pragma once
 
 
 // #define GRIDSIZE 64
@@ -13,9 +12,10 @@ struct Parameters
   unsigned int feat_nb;
   unsigned int edge_feat_nb;
   float neigh_size;
-  int neigh_nb;
+  int neigh_nb; // /!\ Correspond to the number of neighbor of a node when using meshes and the number of points in the neighborhood when using a mesh
   bool feats_3d;
   bool edge_feats;
+  bool mesh;
   // General
   unsigned int gridsize;
   bool viz;
@@ -28,5 +28,3 @@ struct Parameters
   float noise_std;
   unsigned int rotation_deg;
 };
-
-#endif

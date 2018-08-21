@@ -1,22 +1,25 @@
+#pragma once
+
 #include <pcl/io/pcd_io.h>
-#include <pcl/search/kdtree.h>
 
 #include "parameters.h"
 #include "augmentation_preprocessing.cpp"
 #include "occupancy.cpp"
 #include "scope_time.h"
 
-class GraphConstructor
+class PointCloudGraphConstructor
 {
-private:
+protected:
   std::string filename_;
   pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc_;
   pcl::search::KdTree<pcl::PointXYZINormal>::Ptr tree_;
+  std::vector<std::vector<int> > nodes_elts_;
   std::vector<int> sampled_indices_;
   std::vector<bool> valid_indices_;
   std::vector<std::vector<std::vector<int> > > lut_;
 
   Parameters params_;
+
 
   // 1d features
   void shotNodeFeatures(double* result);
@@ -24,8 +27,9 @@ private:
   void pointCoordsNodeFeatures(double* result);
   void dummyNodeFeatures(double* result);
 
-  // 3d features
+  // nd features
   void esf3dNodeFeatures(double** result);
+  void lEsfNodeFeatures(double** result);
 
   // Adjacency matrix construction method
   void occupancyAdjacency(double* adj_mat);
@@ -35,14 +39,14 @@ private:
   void lrfEdgeFeatures(double* edge_feats);
 
 public:
-  GraphConstructor(std::string filename, Parameters params) :
+  PointCloudGraphConstructor(std::string filename, Parameters params) :
     filename_(filename),
     pc_(new pcl::PointCloud<pcl::PointXYZINormal>),
     tree_(new pcl::search::KdTree<pcl::PointXYZINormal>),
     params_(params) {}
 
   void initialize() {
-    ScopeTime t("Initialization", params_.debug);
+    ScopeTime t("Initialization (PointCloudGraphConstructor)", params_.debug);
 
     // Read the point cloud
     if (pcl::io::loadPCDFile<pcl::PointXYZINormal> (filename_.c_str(), *pc_) == -1) {
@@ -78,11 +82,12 @@ public:
     voxelize (*pc_, lut_, params_.gridsize);
   };
 
-  void computeEdgeFeatures(double* edge_feats);
-  void computeAdjacency(double* adj_mat);
-  void correctAdjacencyForValidity(double* adj_mat);
-  void getValidIndices(int* valid_indices);
-  void computeFeatures1d(double* node_feats);
-  void computeFeatures3d(double** node_feats);
-  void samplePoints();
+  virtual void computeEdgeFeatures(double* edge_feats);
+  virtual void computeAdjacency(double* adj_mat);
+  virtual void correctAdjacencyForValidity(double* adj_mat);
+  virtual void getValidIndices(int* valid_indices);
+  virtual void computeFeatures1d(double* node_feats);
+  virtual void computeFeatures3d(double** node_feats);
+  virtual void samplePoints();
+  virtual void viz();
 };
