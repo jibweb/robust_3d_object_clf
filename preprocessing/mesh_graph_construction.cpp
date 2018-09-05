@@ -65,7 +65,8 @@ void MeshGraphConstructor::bfsSamplingAdjacency(double* adj_mat) {
       int s = queue.front();
       queue.pop_front();
       nb_visited_local++;
-      nodes_elts_[node_idx].push_back(s);
+      if (nb_visited_local < params_.neigh_nb/2)
+        nodes_elts_[node_idx].push_back(s);
 
       int nb_pt_idx;
       for (uint nb_idx=0; nb_idx < adj_list_[s].size(); nb_idx++) {

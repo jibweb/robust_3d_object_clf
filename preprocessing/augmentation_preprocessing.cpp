@@ -12,13 +12,13 @@
 #include "parameters.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void scale_points_unit_sphere (pcl::PointCloud<pcl::PointXYZINormal> &pc,
+double scale_points_unit_sphere (pcl::PointCloud<pcl::PointXYZINormal> &pc,
                                float scalefactor,
                                Eigen::Vector4f& centroid) {
   pcl::compute3DCentroid (pc, centroid);
   pcl::demeanPointCloud (pc, centroid, pc);
 
-  float max_distance = 0, d;
+  float max_distance = 0., d;
   pcl::PointXYZINormal cog;
   cog.x = 0;
   cog.y = 0;
@@ -36,6 +36,8 @@ void scale_points_unit_sphere (pcl::PointCloud<pcl::PointXYZINormal> &pc,
   Eigen::Affine3f matrix = Eigen::Affine3f::Identity();
   matrix.scale (scale_factor);
   pcl::transformPointCloud (pc, pc, matrix);
+
+  return static_cast<double>(max_distance);
 }
 
 
@@ -138,8 +140,8 @@ void augment_data(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
   }
 
   if (params.rotation_deg > 0) {
-    int roll = rand() % params.rotation_deg;
-    int pitch = rand() % params.rotation_deg;
+    int roll = 0; //rand() % params.rotation_deg;
+    int pitch = 0; //rand() % params.rotation_deg;
     int yaw = rand() % params.rotation_deg;
 
     if (params.debug)
@@ -153,6 +155,6 @@ void augment_data(pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc,
     transform.rotate(Eigen::AngleAxisf((roll*M_PI) / 180, Eigen::Vector3f::UnitX()));
     transform.rotate(Eigen::AngleAxisf((pitch*M_PI) / 180, Eigen::Vector3f::UnitY()));
     transform.rotate(Eigen::AngleAxisf((yaw*M_PI) / 180, Eigen::Vector3f::UnitZ()));
-    pcl::transformPointCloud(*pc, *pc, transform); //Only rotate target cloud
+    pcl::transformPointCloudWithNormals(*pc, *pc, transform); //Only rotate target cloud
   }
 }

@@ -50,7 +50,7 @@ class Model(object):
                                                      (None,
                                                       p.nodes_nb,
                                                       p.feat_nb,
-                                                      5),
+                                                      6),
                                                      name="node_feats")
                 else:
                     self.node_feats = tf.placeholder(tf.float32,

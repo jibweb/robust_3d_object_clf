@@ -17,6 +17,7 @@ protected:
   std::vector<int> sampled_indices_;
   std::vector<bool> valid_indices_;
   std::vector<std::vector<std::vector<int> > > lut_;
+  double scale_;
 
   Parameters params_;
 
@@ -37,6 +38,8 @@ protected:
   // Edge features
   void pointPairEdgeFeatures(double* edge_feats);
   void lrfEdgeFeatures(double* edge_feats);
+  void coordsEdgeFeatures(double* edge_feats);
+  void rotZEdgeFeatures(double* edge_feats);
 
 public:
   PointCloudGraphConstructor(std::string filename, Parameters params) :
@@ -57,9 +60,12 @@ public:
 
     // Data augmentation
     Eigen::Vector4f centroid;
-    scale_points_unit_sphere (*pc_, params_.gridsize/2, centroid);
+    scale_ = scale_points_unit_sphere (*pc_, params_.gridsize/2, centroid);
     params_.neigh_size = params_.neigh_size * params_.gridsize/2;
     augment_data(pc_, params_);
+
+    if (params_.scale && params_.debug)
+      std::cout << "Scale: " << scale_ << std::endl;
 
 
     // Initialize the tree
@@ -89,5 +95,5 @@ public:
   virtual void computeFeatures1d(double* node_feats);
   virtual void computeFeatures3d(double** node_feats);
   virtual void samplePoints();
-  virtual void viz();
+  virtual void viz(double* adj_mat);
 };

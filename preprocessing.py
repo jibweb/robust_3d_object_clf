@@ -15,6 +15,8 @@ p.define("gridsize", 64)
 p.define("feats_3d", True)
 p.define("edge_feats", False)
 p.define("mesh", False)
+p.define("scale", False)
+p.define("min_angle_z_normal", 0)
 
 # Data transformation
 p.define("to_remove", 0.)

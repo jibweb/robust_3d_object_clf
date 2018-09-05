@@ -13,11 +13,13 @@ cdef extern from "wrapper_interface.cpp":
         unsigned int nodes_nb
         unsigned int feat_nb
         unsigned int edge_feat_nb
+        float min_angle_z_normal
         float neigh_size
         int neigh_nb
         bint feats_3d
         bint edge_feats
         bint mesh
+        bint scale
         # General
         unsigned int gridsize
         bint viz
@@ -57,6 +59,7 @@ def get_graph(filename, **kwargs):
     params.feats_3d = kwargs.get("feats_3d")
     params.edge_feats = kwargs.get("edge_feats")
     params.mesh = kwargs.get("mesh")
+    params.scale = kwargs.get("scale")
 
     params.gridsize = kwargs.get("gridsize")
     params.viz = kwargs.get("viz")
@@ -68,6 +71,7 @@ def get_graph(filename, **kwargs):
     params.occl_pct = kwargs.get("occl_pct")
     params.noise_std = kwargs.get("noise_std")
     params.rotation_deg = kwargs.get("rotation_deg")
+    params.min_angle_z_normal = kwargs.get("min_angle_z_normal")
 
     cdef np.ndarray[double, ndim=2, mode="c"] adj_mat = np.zeros([params.nodes_nb,
                                                                   params.nodes_nb],
@@ -104,6 +108,7 @@ def get_graph_nd(filename, **kwargs):
     params.feats_3d = kwargs.get("feats_3d")
     params.edge_feats = kwargs.get("edge_feats")
     params.mesh = kwargs.get("mesh")
+    params.scale = kwargs.get("scale")
 
     params.gridsize = kwargs.get("gridsize")
     params.viz = kwargs.get("viz")
@@ -115,6 +120,7 @@ def get_graph_nd(filename, **kwargs):
     params.occl_pct = kwargs.get("occl_pct")
     params.noise_std = kwargs.get("noise_std")
     params.rotation_deg = kwargs.get("rotation_deg")
+    params.min_angle_z_normal = kwargs.get("min_angle_z_normal")
 
     cdef np.ndarray[double, ndim=2, mode="c"] adj_mat = np.zeros([params.nodes_nb,
                                                                   params.nodes_nb],
@@ -127,9 +133,10 @@ def get_graph_nd(filename, **kwargs):
 
     if params.debug:
         print "\n###\n File:", filename
+        print params
 
     if params.feat_nb >= 500:
-        node_shape = [params.feat_nb, 5, 1]
+        node_shape = [params.feat_nb, 6, 1]
     else:
         node_shape = [params.feat_nb, params.feat_nb, params.feat_nb]
 
