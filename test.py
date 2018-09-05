@@ -15,7 +15,7 @@ from utils.viz import plot_confusion_matrix
 # Generic
 set_log_level("INFO")
 TEST_REPEAT = 3
-MODEL_CKPT = "model_230/model.ckpt"
+MODEL_CKPT = "model_1960/model.ckpt"
 
 
 if __name__ == "__main__":
@@ -40,6 +40,7 @@ if __name__ == "__main__":
 
     os.system("rm -rf {}test_tb/*".format(SAVE_DIR))
     p.load("params/{}_{}.yaml".format(DATASET.name, MODEL_NAME))
+    # p.rotation_deg = 180
 
     # --- Pre processing function setup ---------------------------------------
     feat_compute = get_graph_preprocessing_fn(p)
@@ -110,5 +111,6 @@ if __name__ == "__main__":
 
                 test_iter += 1
 
-        plot_confusion_matrix(total_cm, sorted(CLASS_DICT.keys()))
+        plot_confusion_matrix(total_cm, sorted(CLASS_DICT.keys()),
+                              normalize=True)
         plt.show()
