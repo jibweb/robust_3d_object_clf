@@ -12,7 +12,7 @@ from utils.params import params as p
 
 
 # === MODEL AND DATASET PRE-SETUP =============================================
-DATASET = DATASETS.ModelNet10
+DATASET = DATASETS.ModelNet40
 Dataset, CLASS_DICT = get_dataset(DATASET)
 
 
@@ -81,10 +81,19 @@ if __name__ == "__main__":
         # --- Dataset setup ---------------------------------------------------
         regex = "/*_full_wnormals_wattention.ply" if p.mesh  \
             else "/*_full_wnormals_wattention.pcd"
+        pbalance_train_set = False if DATASET == DATASETS.ScanNet \
+            else True
         dataset = Dataset(batch_size=p.batch_size,
+                          balance_train_set=pbalance_train_set,
                           val_set_pct=p.val_set_pct,
                           regex=regex)
 
+        print "#"*80
+        print Dataset
+        print dataset.balance_train_set
+        dataset.prepare_sets()
+        print dataset.train_batch_no
+        print "#"*80
         # --- Model Setup -----------------------------------------------------
         model = Model()
 

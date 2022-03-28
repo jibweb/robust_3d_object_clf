@@ -38,6 +38,8 @@ void PointCloudGraphConstructor::computeFeatures3d(double** node_feats) {
     esf3dNodeFeatures(node_feats);
   else if (params_.feat_nb >= 500)
     lEsfNodeFeatures(node_feats);
+    // coordsSetNodeFeatures(node_feats);
+    // lEsfNodeFeatures(node_feats); // TODO Change this TMP assignment
 }
 
 
@@ -719,6 +721,8 @@ void PointCloudGraphConstructor::lEsfNodeFeatures(double** result) {
 
 
         // Feature computation
+        // dist = scale_ * v12.norm() / (params_.gridsize) - 0.5;
+        // z = scale_ * v12(2) / params_.gridsize - 0.5;
         dist = v12.norm() / (params_.gridsize) - 0.5;
         z = v12(2) / params_.gridsize - 0.5;
         v12.normalize();
@@ -766,6 +770,34 @@ void PointCloudGraphConstructor::lEsfNodeFeatures(double** result) {
 }
 
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void PointCloudGraphConstructor::coordsSetNodeFeatures(double** result) {
+  pcl::PointXYZINormal p;
+  std::vector< int > k_indices;
+  std::vector< float > k_sqr_distances;
+  const uint sample_neigh_nb = params_.feat_nb;
+
+  for (uint pt_idx=0; pt_idx<sampled_indices_.size(); pt_idx++) {
+    if (params_.mesh)
+      k_indices = nodes_elts_[pt_idx];
+    else
+      tree_->radiusSearch(pc_->points[sampled_indices_[pt_idx]], params_.neigh_size, k_indices, k_sqr_distances);
+
+    for (uint index1=0; index1 < k_indices.size(); index1++) {
+      if (index1 >= sample_neigh_nb)
+        break;
+
+      p = pc_->points[k_indices[index1]];
+
+      // Fill in the matrix
+      result[pt_idx][3*index1 + 0] = p.x * 2. / params_.gridsize;
+      result[pt_idx][3*index1 + 1] = p.y * 2. / params_.gridsize;
+      result[pt_idx][3*index1 + 2] = p.z * 2. / params_.gridsize;
+    }
+  }
+}
+
+
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////// VIZ //////////////////////////////////////////////////////////////
@@ -780,6 +812,23 @@ void PointCloudGraphConstructor::viz(double* adj_mat) {
   for (uint i=0; i<sampled_indices_.size(); i++) {
     int idx = sampled_indices_[i];
 
+    pcl::PointXYZINormal p1 = pc_->points[idx];
+    pcl::PointXYZINormal p2_n = pc_->points[idx];
+    p2_n.x -= 5*p2_n.normal_x;
+    p2_n.y -= 5*p2_n.normal_y;
+    p2_n.z -= 5*p2_n.normal_z;
+
+    pcl::PointXYZINormal p2_u = pc_->points[idx];
+    p2_u.x -= 5*p2_u.normal_x;
+    p2_u.y -= 5*p2_u.normal_y;
+
+    pcl::PointXYZINormal p2_z = pc_->points[idx];
+    p2_z.z += 5*1.;
+
+    // viewer->addArrow (p2_n, p1, 1., 1., 1., false, "arrow_n" + std::to_string(i));
+    // viewer->addArrow (p2_u, p1, 0., 1., 1., false, "arrow_u" + std::to_string(i));
+    // viewer->addArrow (p2_z, p1, 1., 0., 1., false, "arrow_z" + std::to_string(i));
+
     if (params_.viz_small_spheres)
       viewer->addSphere<pcl::PointXYZINormal>(pc_->points[idx], 0.05, 1., 0., 0., "sphere_" +std::to_string(idx));
     else
@@ -789,7 +838,7 @@ void PointCloudGraphConstructor::viz(double* adj_mat) {
       if (adj_mat[params_.nodes_nb*i + i2] > 0.) {
         int idx2 = sampled_indices_[i2];
         if (idx != idx2)
-          viewer->addLine<pcl::PointXYZINormal>(pc_->points[idx], pc_->points[idx2], 0., 0., 1., "line_" +std::to_string(idx)+std::to_string(idx2));
+          viewer->addLine<pcl::PointXYZINormal>(pc_->points[idx], pc_->points[idx2], 1., 1., 0., "line_" +std::to_string(idx)+std::to_string(idx2));
       }
     }
   }

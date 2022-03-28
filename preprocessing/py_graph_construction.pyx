@@ -136,7 +136,7 @@ def get_graph_nd(filename, **kwargs):
         print params
 
     if params.feat_nb >= 500:
-        node_shape = [params.feat_nb, 6, 1]
+        node_shape = [params.feat_nb, 6, 1]  # TODO TMP CHANGE !!
     else:
         node_shape = [params.feat_nb, params.feat_nb, params.feat_nb]
 

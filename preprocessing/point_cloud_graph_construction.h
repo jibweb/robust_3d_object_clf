@@ -31,6 +31,7 @@ protected:
   // nd features
   void esf3dNodeFeatures(double** result);
   void lEsfNodeFeatures(double** result);
+  void coordsSetNodeFeatures(double** result);
 
   // Adjacency matrix construction method
   void occupancyAdjacency(double* adj_mat);

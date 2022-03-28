@@ -15,7 +15,7 @@ from utils.viz import plot_confusion_matrix
 # Generic
 set_log_level("INFO")
 TEST_REPEAT = 3
-MODEL_CKPT = "model_1960/model.ckpt"
+MODEL_CKPT = "model_960/model.ckpt"
 
 
 if __name__ == "__main__":
@@ -52,6 +52,8 @@ if __name__ == "__main__":
     dataset = Dataset(batch_size=p.batch_size,
                       val_set_pct=p.val_set_pct,
                       regex=regex)
+
+    print p
 
     # --- Model Setup ---------------------------------------------------------
     model = Model()
@@ -114,3 +116,5 @@ if __name__ == "__main__":
         plot_confusion_matrix(total_cm, sorted(CLASS_DICT.keys()),
                               normalize=True)
         plt.show()
+
+        print total_cm
